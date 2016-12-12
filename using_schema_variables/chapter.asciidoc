@@ -1,0 +1,94 @@
+[[using-schema-variables]]
+== Using Schema Variables
+
+Our simple hello_world instance in the previous chapter had a very simple schema, containing a single field that ran a simple self-contained method. As we become more adventurous with Automate, we'll find that it can be useful to associate variables or _attributes_ with an instance. Any Automate method run by the instance can read these instance attributes, allowing us to define variables or constants outside of our Ruby scripts. This simplifies maintenance and promotes code reuse. Methods can also write to these instance attributes, allowing a degree of data sharing between multiple methods that might be run in sequence from the same instance. 
+
+In our next Automate example, we'll add some attribute fields to our class schema, set values for those attributes in our instance, and read them from our method. 
+
+=== Preparing the Schema
+
+Let's edit the schema of the _Methods_ Class (see <<i1>>).
+
+[[i1]]
+.Editing the schema of the methods class
+image::images/ss1.png[Screenshot,500,align="center"]
+{zwsp} +
+
+We'll add three attributes, _servername_, _username_ and _password_. The _servername_ and _username_ attributes will be simple text strings, but the _password_ attribute will have a Data Type of *Password*, meaning it will be stored in an encrypted form in the database (see <<i2>>).
+
+[[i2]]
+.Adding attributes
+image::images/ss2.png[Screenshot,500,align="center"]
+{zwsp} +
+
+Click *Save*. 
+
+We need to ensure that the schema method (our _execute_ field) is listed _after_ the three new schema attributes in the field list, otherwise the attributes won't be visible to the method when it runs. If necessary, run *Configuration -> Edit sequence* to shuffle the schema fields up or down (see <<i4>>).
+
+[[i4]]
+.Editing a class schema sequence
+image::images/ss4.png[Screenshot,420,align="center"]
+{zwsp} +
+
+=== The Instance
+Now we'll create a new instance in our _Methods_ class as before, but this time called _get_credentials_. We'll fill in some values for the _servername_, _username_ and _password_ schema attributes (see <<i5>>).
+
+[[i5]]
+.Entering the instance attribute details
+image::images/ss5.png[Screenshot,380,align="center""]
+{zwsp} +
+
+Notice that our _password_ schema value has been obfuscated.
+
+=== The Method
+
+Each of the schema attributes will be available to our method as hash key/value pairs from `$evm.object`, which is the Automate object representing our currently running instance.
+
+Our code for this example will be as follows:
+
+[source,ruby]
+----
+$evm.log(:info, "get_credentials started")
+
+servername = $evm.object['servername']
+username   = $evm.object['username']
+password   = $evm.object.decrypt('password')
+
+$evm.log(:info, "Server: #{servername}, Username: #{username}, Password: \
+#{password}")
+exit MIQ_OK
+----
+We'll create a method in our _Methods_ class as we did before, but this time called _get_credentials_. We'll add our code to the *Data* box, click *Validate*, then *Save*.
+
+=== Running the Instance
+
+Finally we'll run the new instance through *Automate -> Simulation* again, invoking _Call_Instance_ once more with the appropriate Attribute/Value pairs (see <<i7>>).
+
+[[i7]]
+.Argument name/value pairs for Call_Instance
+image::images/ss7.png[Screenshot,450,align="center"]
+{zwsp} +
+
+We check _automation.log_ and see that the attributes have been retrieved from the instance schema, and the password has been decrypted:
+
+....
+Invoking [inline] method [/ACME/General/Methods/get_credentials] with inputs [{}]
+<AEMethod [/ACME/General/Methods/get_credentials]> Starting
+<AEMethod get_credentials> get_credentials started
+<AEMethod get_credentials> Server: myserver, Username: admin, Password: guess
+<AEMethod [/ACME/General/Methods/get_credentials]> Ending
+Method exited with rc=MIQ_OK
+....
+
+[NOTE]
+The password value is encrypted using the _v2_key_ created when the CloudForms/ManageIQ database is initialised, and is unique to that database (and hence region). If we export an Automate Datastore containing encrypted passwords and import it into an appliance in a different CloudForms/ManageIQ region, we won't be able to decrypt the password.
+
+
+=== Summary
+
+In this chapter we've seen how we can store instance variables called _attributes_ in our schema, that can be accessed by the methods run from that instance.
+
+Using class or instance schema variables like this is very common. One example is when we use CloudForms or ManageIQ to provision virtual machines. The out-of-the-box virtual machine provisioning workflow includes an approval stage (see link:../provisioning_approval/chapter.asciidoc[Provisioning Approval]), that allows us to define a default for the number of VMs, and their sizes (CPUs & Memory) that can be auto-provisioned without administrative approval. The values *max_vms*, *max_cpus* and *max_memory* used at this workflow stage are stored as schema attributes in the approval instance, and are therefore available to us to easily customise without changing any Ruby code.
+
+When writing our own integration methods, we often need to specify a valid username and password to connect to other systems outside of CloudForms/ManageIQ, for example if making a SOAP call to a hardware load balancer (see link:../calling_external_services/chapter.asciidoc[Calling External Services] for an example). We can use the technique shown in this example to securely store and retrieve credentials to connect to anything else in our Enterprise.
+

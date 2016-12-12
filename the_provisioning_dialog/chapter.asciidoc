@@ -1,0 +1,253 @@
+[[the-provisioning-dialog]]
+== The Provisioning Dialog
+
+So far in Part II we have looked at several ways in which the virtual machine provisioning _process_ can be customised. We have seen how we can automate the selection of virtual machine name, decide where to place the virtual machine, and expand the state machine to insert our own provisioning workflow steps.
+
+This chapter will look at how the initial dialog that launched the provisioning process can also be customised. We might want to do this to expand the options available to us, or to preconfigure and hide other dialog elements for certain groups of users.
+
+The specification for the new virtual machine or instance is entered into the _Provisioning Dialog_ that is displayed to the user in the WebUI. This dialog prompts for all of the parameters and characteristics that will make up the new VM, such as the name, number of CPUs, and IP address.
+
+=== Tabs and Input Fields
+
+The provisioning dialog contains a number of tabs (**Request**, **Purpose**, **Catalog**, **Environment**, etc.), and a number of input fields per tab (see <<i1>>).
+
+[[i1]]
+.The hardware tab of the VM provisioning dialog
+image::images/ss1.png[screenshot]
+{zwsp} +
+
+The provisioning dialog is context-sensitive, so a different set of input field options will be displayed when provisioning into VMware or OpenStack, for example.
+
+=== Dialog YAML
+
+Each provisioning dialog is formatted from a large (900 line+) YAML file, specifying the main tabs, dialogs and fields to be displayed, for example:
+
+....
+---
+:buttons:
+- :submit
+- :cancel
+:dialogs:
+  :requester:
+    :description: Request
+    :fields:
+      :owner_phone:
+        :description: Phone
+        :required: false
+        :display: :hide
+        :data_type: :string
+...
+      :owner_email:
+        :description: E-Mail
+        :required: true
+        :display: :edit
+        :data_type: :string
+ ...
+   :purpose:
+    :description: Purpose
+    :fields:
+      :vm_tags:
+        :required_method: :validate_tags
+        :description: Tags
+        :required: false
+        :options:
+          :include: []
+...
+        :display: :edit
+        :required_tags: []
+        :data_type: :integer
+    :display: :hide
+    :field_order:
+ ...
+ :dialog_order:
+- :requester
+- :purpose
+....
+
+Dialog tabs and fields have four useful attributes that can be set:
+
+* Hidden (`:display: :hide`)
+* Visible (`:display: :show`)
+* Editable (`:display: :edit`)
+* Mandatory (`:required: true`)
+
+=== Selection of VM Provisioning Dialog
+
+Several VM provisioning dialogs are supplied out-of-the-box with CloudForms and ManageIQ, each of which provides the context sensitivity for the particular provisioning operation. They are found under the
+*Automate -> Customization* menu, in the *Provisioning Dialogs* accordion.
+
+[options="header",]
+|=======================================================================
+|Name |Description
+|miq_provision_amazon_dialogs_template |Sample Amazon Instance
+Provisioning Dialog
+
+|miq_provision_azure_dialogs_template |Sample Azure Instance
+Provisioning Dialog
+
+|miq_provision_google_dialogs_template |Sample Google Instance
+Provisioning Dialog
+
+|miq_provision_microsoft_dialogs_template |Sample Microsoft VM
+Provisioning Dialog
+
+|miq_provision_openstack_dialogs_template |Sample Openstack Instance
+Provisioning Dialog
+
+|miq_provision_redhat_dialogs_clone_to_vm |Sample RedHat VM Clone to VM
+Dialog
+
+|miq_provision_redhat_dialogs_template |Sample RedHat VM Provisioning
+Dialog
+
+|miq_provision_vmware_dialogs_clone_to_template |Sample VM Clone to Template
+Dialog
+
+|miq_provision_vmware_dialogs_clone_to_vm |Sample VM Clone to VM Dialog
+
+|miq_provision_dialogs_pre_sample |Sample VM Pre-Provisioning Dialog
+
+|miq_provision_dialogs |Sample VM Provisioning Dialog
+
+|miq_provision_vmware_dialogs_template |Sample VM Provisioning Dialog
+(Template)
+|=======================================================================
+
+The various dialogs contain values that are relevant to their target provider type (Amazon, Azure, Google, OpenStack, Microsoft, VMware or RedHat), and also to the operation type (clone from template, clone to template, or clone to vm).
+
+The selection of VM provisioning dialog to display to a user depends on the *dialog_name* attribute in the provisioning group profile. The default *dialog_name* value for the _.missing_ and _EvmGroup-super_administrator_ profiles is:
+
+....
+${#dialog_name_prefix}_${/#dialog_input_request_type}
+....
+
+The two variables are substituted at runtime, and provide the context sensitivity. The *dialog_name_prefix* value is determined by the _vm_dialog_name_prefix_ method, which contains the following code:
+
+[source,ruby]
+----
+platform  = $evm.root['platform']
+$evm.log("info", "Detected Platform:<#{platform}>")
+
+if platform.nil?
+  source_id = $evm.root['dialog_input_src_vm_id']
+  source    = $evm.vmdb('vm_or_template', source_id) unless source_id.nil?
+  if source
+    platform = source.model_suffix.downcase
+  else
+    platform = "vmware"
+  end
+end
+
+dialog_name_prefix = "miq_provision_#{platform}_dialogs"
+$evm.object['dialog_name_prefix'] = dialog_name_prefix
+----
+
+The *dialog_input_request_type* value is translated by a Rails class _MiqRequestWorkflow_ to be the instance name of the VM provisioning state machine that we are using - that is, _template_, _clone_to_vm_ or _clone_to_template_.
+
+So for a VM provision request from template into an RHEV provider, the *dialog_name* value will be substituted as follows:
+
+....
+miq_provision_redhat_dialogs_template
+....
+
+=== Group-Specific Dialogs
+
+We can set separate provisioning dialogs for individual groups if we wish. As an example the VMware-specific _miq_provision_dialogs-user_ dialog presents a reduced set of tabs, dialogs and input fields. The hidden tabs have been given default values, and _Automatic Placement_ has been set to `true`:
+
+....
+      :placement_auto:
+        :values:
+          false: 0
+          true: 1
+        :description: Choose Automatically
+        :required: false
+        :display: :edit
+        :default: true
+        :data_type: :boolean
+....
+
+We can create per-group dialogs as we wish, customising the values that are hidden or set as default.
+
+==== Example - Expanding the Dialog
+
+In some cases it's useful to be able to expand the range of options presented by the dialog. For example the standard dialogs only allow us to specify VM memory in units of 1GB, 2GB or 4GB (see <<i2>>).
+
+[[i2]]
+.Default memory size options
+image::images/ss2.png[Screenshot,380,align="center"]
+{zwsp} +
+
+[NOTE]
+====
+CloudForms 4.2/ManageIQ _Euwe_ has increased the default memory sizes available in this drop-down
+====
+
+These options come from the `:vm_memory` dialog section:
+
+....
+      :vm_memory:
+        :values:
+          '2048': '2048'
+          '4096': '4096'
+          '1024': '1024'
+        :description: Memory (MB)
+        :required: false
+        :display: :edit
+        :default: '1024'
+        :data_type: :string
+....
+
+We sometimes need to be able to provision larger VMs, but fortunately we can customise the dialog to our own needs. 
+
+===== Copy the existing dialog
+
+If we identify the dialog that is being used (in this example case it is _miq_provision_redhat_dialogs_template_ as we're provisioning into RHEV using native clone), we can copy the dialog to make it editable (we'll call the new version _bit63_miq_provision_redhat_dialogs_template_).
+
+We can then expand the `:vm_memory` section to match our requirements:
+
+....
+      :vm_memory:
+        :values:
+          '1024': '1024'
+          '2048': '2048'
+          '4096': '4096'
+          '8192': '8192'
+          '16384': '16384'
+        :description: Memory (MB)
+        :required: false
+        :display: :edit
+        :default: '1024'
+        :data_type: :string
+....
+
+===== Create a group profile
+
+Now we copy the _/Infrastructure/VM/Provisioning/Profile_ class into our own domain, and create a profile instance for the group that we wish to assign the new dialog to, in this case *Bit63Group-user* (see <<i3>>).
+
+[[i3]]
+.Creating a new profile instance
+image::images/ss3.png[Screenshot,350,align="center"]
+{zwsp} +
+
+The *dialog_name* field in the new profile should contain the name of our new dialog (see <<i4>>).
+
+[[i4]]
+.The dialog_name schema field value changed to the new profile name
+image::images/ss4.png[Screenshot,500,align="center"]
+{zwsp} +
+
+===== Testing the provisioning dialog
+
+To test this we login as a user who is a member of the *Bit63Group-user* group, and provision a virtual machine. If we navigate to the *Hardware* tab of the provisioning dialog we should see the expanded range of memory options (see <<i5>>).
+
+[[i5]]
+.Expanded range of memory sizes
+image::images/ss5.png[Screenshot,380,align="center"]
+{zwsp} +
+
+=== Summary
+
+In this chapter we've seen how the virtual machine provisioning dialog is used, and how it can be customised. 
+
+We often create group-specific dialogs that contain a default set of provisioning options, and we can take advantage of this when we make an API call to provision a virtual machine as a particular user for example. The user's group profile will provide default values for the virtual machine, so we need only specify override values in our API call parameters.
+

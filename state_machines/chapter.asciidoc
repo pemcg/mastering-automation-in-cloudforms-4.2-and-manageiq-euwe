@@ -1,0 +1,235 @@
+[[state-machines]]
+== State Machines
+
+We have mentioned _workflows_ several times in the preceding chapters. A workflow can be simply defined as a sequence of operations or steps that make up a work process. Many tasks that we perform as cloud or systems administrators can be broken down into simple workflow steps:
+
+. Do something
+. Do something
+. Do something
+
+
+ManageIQ Automate allows us to add intelligence to our workflow steps by defining steps as _States_. Each state is capable of performing pre and post processing around the main task, and can handle and potentially recover from errors that occur while performing the task. Individual states can enter a retry loop, with the maximum number of retries and overall timeout for the state being definable.
+
+[width="86%",cols="^10%,^22%,^22%,^22%,^22%",options="header",align="center"]
+|=======
+|Step|On Entry|Task|On Exit|On Error
+|1|Pre-process before doing something|Do something|Post-process after doing something|Handle any errors while doing something
+|2|Pre-process before doing something|Do something|Post-process after doing something|Handle any errors while doing something
+|3|Pre-process before doing something|Do something|Post-process after doing something|Handle any errors while doing something
+|=======
+
+When we assemble several of these intelligent states together, it become an Automate _State Machine_. The logic flow through an Automate State Machine is shown in <<i0>>.
+
+[[i0]]
+.Simple automate state machine workflow
+image::images/state_machine_logic.png[screenshot,650,align="center"]
+{zwsp} +
+
+=== Building a State Machine
+
+We build an Automate state machine in much the same way that we define any other class schema. One of the types of schema field is a *state*, and if we construct a class schema definition comprising a sequences of *states*, this then becomes a state machine.  
+
+[TIP]
+====
+A state machine schema should comprise _only_ assertions, attributes or states. We should not have any schema lines that have a *Type* field of *Relationship* in a state machine.
+====
+
+==== State Machine Schema Field Columns
+
+If we look at all of the attributes that we can add for a schema field, in addition to the familar **Name**, **Description**, and *Value* headings, we see a number of column headings that we haven't used so far (see <<i1>>).
+
+[[i1]]
+.Schema field column headings
+image::images/ss1.png[screenshot,700,align="center"]
+{zwsp} +
+
+The schema columns for a state machine are the same as in any other class schema, but we use more of them.
+
+===== Value (Instance)/Default Value (Schema)
+
+As in any other class schema, this is a relationship to an instance or method to be run to perform the main processing of the state. We can either specify the full URI to an instance, or from CloudForms 4.1/ManageIQ _Darga_ onwards, if the method is defined locally in the same state machine class we can reference it by preceeding the method name with "Method::" (see <<i2>>)
+
+[[i2]]
+.Specifying value fields as an instance URI or a locally defined method
+image::images/ss5.png[Screenshot,550,align="center"]
+{zwsp} +
+
+Surprising as it may seem, we don't necessarily need to populate the *Value* field for a state machine (see *On Entry*, next), although it is good practice to do so.
+
+===== On Entry
+
+We can optionally define an *On Entry* _method_ to be run before the "main" method (the *Value* entry) is run. We can use this to setup or test for pre-conditions to the state, for example if the "main" method adds a tag to an object, the *On Entry* method might check that the category and tag exist.
+
+The method name can be specified as a relative path to the local class (i.e. just the method name), or in Namespace/Class/Method syntax.
+
+Note - some older state machines such as _/Infrastructure/VM/Provisoning/StateMachines/ProvisionRequestApproval/_ use an *On Entry* _method_ instead of a *Value* _relationship_ to perform the main work of the state. With the advent of the "Method::" syntax described above, this usage is deprecated, and we should always use a *Value* relationship in our state machines.
+
+===== On Exit
+
+We can optionally define an *On Exit* _method_ to be run if the "main" method (the *Value* relationship/instance or *On Entry* method) returns `$evm.root['ae_result'] = 'ok'`
+
+===== On Error
+
+We can optionally define an *On Error* _method_ to be run if the "main" method (the *Value* relationship/instance or *On Entry* method) returns `$evm.root['ae_result'] = 'error'`
+
+===== Max Retries
+
+We can optionally define a maximum number of retries that the state is allowed to attempt. Defining this in the state rather than the method itself simplifies the method coding, and makes it easier to write generic methods that can be re-used in a number of state machines.
+
+===== Max Time
+
+We can optionally define a maximum time (in seconds) that the state will be permitted to run for, before being terminated.
+
+==== State Machine Example
+
+We can look at the out-of-the-box _/Infrastructure/VM/Provisoning/StateMachines/ProvisionRequestApproval/Default_ state machine instance as an example, and see that it defines four attributes, and has just two states; *ValidateRequest* and **ApproveRequest** (see <<i3>>).
+
+[[i3]]
+.The /ProvisionRequestApproval/Default state machine
+image::images/ss2.png[Screenshot,700,align="center"]
+{zwsp} +
+
+Neither state has a *Value* relationship, but each runs a locally defined class method to perform the main processing of the state.
+
+The *ValidateRequest* state runs the _validate_request_ *On Entry* method, and _pending_request_ as the *On Error* method.
+
+The *ApproveRequest* state runs the _approve_request_ *On Entry* method.
+
+=== State Variables
+
+There are several state variables that can be read or set by state methods to control the processing of the state machine.
+
+==== Setting State Result
+
+We can run a method within the context of a state machine to return a completion status to the Automation Engine, which then decides which next action to perform (such as whether to advance to the next state).
+
+We do this by setting one of three values in the `ae_result` hash key:
+
+[source,ruby]
+----
+# Signal an error
+$evm.root['ae_result'] = 'error'
+$evm.root['ae_reason'] = "Failed to do something"
+
+# Signal that the step should be retried after a time interval
+$evm.root['ae_result']         = 'retry'
+$evm.root['ae_retry_interval'] = '1.minute'
+
+# Signal that the step completed successfully
+$evm.root['ae_result'] = 'ok'
+----
+
+==== State Retries
+
+We can find out whether we're in a step that's being retried by querying the `ae_state_retries` key:
+
+[source,ruby]
+----
+state_retries = $evm.root['ae_state_retries'] || 0
+----
+
+==== Getting the State Machine Name
+
+We can find the name of the state machine that we're running in:
+
+[source,ruby]
+----
+state_machine = $evm.current_object.class_name
+----
+
+==== Getting the Current Step in the State Machine
+
+We can find out which step (state) in the state machine we're executing in (useful if we have a generic error handling method):
+
+....
+step = $evm.root['ae_state']
+....
+
+==== Getting the on_entry, on_exit, on_error Status State
+
+A method can determine which status state (on_entry, on_exit, or on_error) it's currently executing in, as follows:
+
+[source,ruby]
+----
+if $evm.root['ae_status_state'] == "on_entry"
+  ...
+----
+
+==== Error Recovery
+
+An **on_error** method has the capability to take recovery action from an error condition, and set `$evm.root['ae_result'] = 'continue'` if required to ensure that the state machine continues.
+
+==== Skipping States
+
+To allow for intelligent **on_entry** pre-processing, and to advance if pre-conditions are already met, an **on_entry** method can set `$evm.root['ae_result'] = 'skip'` to advance directly to the next state, without calling the current state's 'Value' method.
+
+==== Jumping to a Specific State
+
+Any of our state machine methods can set `$evm.root['ae_next_state'] = <state_name>` to allow the state machine to advance forward several steps.
+
+Note: setting `ae_next_state` only allows us to go forward in a state machine. If we want to go back to a previous state, we can restart the state machine, but set `ae_next_state` to the name of the state that we want to restart at. When issuing a restart, if `ae_next_state` is not specified the state machine will restart at the first state. 
+
+[source,ruby]
+----
+# Currently in state4
+$evm.root['ae_result'] = 'restart' 
+$evm.root['ae_next_state'] = 'state2'
+----
+
+==== Nested State Machines
+
+As has been mentioned, the *Value* field of a state machine should be a relationship to an instance. We can also call an entire state machine from a step in a 'parent' state machine if we wish (see <<i4>>).
+
+[[i4]]
+.Nested state machines
+image::images/ss3.png[Nested State Machines,350,align="center"]
+{zwsp} +
+
+=== Saving Variables Between State Retries
+
+When a step is retried in a state machine, the Automation Engine reinstantiates the entire state machine, starting from the State issuing the retry. 
+
+[NOTE]
+====
+This is why state machines should not contain lines that have a *Type* field of *Relationship*. A State is a special kind of relationship that can be skipped during retries. If we had a *Relationship* line anywhere in our state machine, then it would be re-run every time a later *State*  issued a `$evm.root['ae_result'] = 'retry'`. 
+====
+
+This reinstantiation makes life difficult if we want to store and retrieve variables between steps in a state machine (something we frequently want to do). Fortunately there are three `$evm` methods that we can use to test the presence of, save, and read variables between reinstantiations of our state machine:
+
+[source,ruby]
+----
+$evm.set_state_var(:server_name, "myserver")
+if $evm.state_var_exist?(:server_name)
+  server_name = $evm.get_state_var(:server_name)
+end
+----
+
+We can save most types of variables, but because of the dRuby mechanics behind the scenes, we can't save hashes that have default initializers, e.g.
+
+[source,ruby]
+----
+my_hash=Hash.new { |h, k| h[k] = {} }
+----
+
+Here the `|h, k| h[k] = {}` is the initializer function. 
+
+=== Summary
+
+State machines are incredibly useful, and we often use them to create our own intelligent, reusable workflows. They allow us to focus on the logic of our state methods, while the Automation Engine handles the complexity of the on-entry and on-exit condition handling, and state retry logic.
+
+When deciding whether to implement a workflow as a state machine, consider the following:
+
+* Could I skip any of my workflow steps by intelligently preprocessing?
+
+* Would my code be cleaner if I could assume that preconditions had been setup or tested before entry?
+
+* Might any of my workflow steps result in an error that could possibly he handled and recovered from?
+
+* Do any of my workflow steps require me to retry an operation in a wait loop?
+
+* Do I need to put a timeout on my workflow completing?
+
+If the answer to any of these questions is "yes", then a state machine is a good candidate for implementation.
+
+==== Further Reading
+http://talk.manageiq.org/t/automate-state-machine-enhancements/678/17[Automate State Machine Enhancements]

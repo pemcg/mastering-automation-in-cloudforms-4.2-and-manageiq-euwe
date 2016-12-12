@@ -1,0 +1,6 @@
+[[part1]]
+[part]
+:numbered!:
+== Working with Automate
+
+Part I introduces the objects and concepts that we work with when we develop our automation scripts. Some of the chapters contain practical coding examples to assist the learning process, while others are more theoretical and contain background information to help build an overall understanding of the object model.

@@ -1,0 +1,54 @@
+[[approval-and-quota]]
+== Approval and Quota
+
+We discovered in link:../provisioning_approval/chapter.asciidoc[Provisioning Approval] and link:../provisioning_quota_management/chapter.asciidoc[Provisioning Quota Management] that the virtual machine provisioning process includes an approval stage - to allow administrators to optionally approve large VM requests - and a quota checking stage that enforces quotas applied to access control groups or tenants. We also learnt that these workflows were triggered from _MiqProvisionRequest_created_ and _MiqProvisionRequest_starting_ policy Instances. When we create a virtual machine from a service catalog item however, our request object is different, so we cannot rely on the existing approval and quota workflow triggers.
+
+This chapter examines the approval and quota workflows when we provision a virtual machine from a service catalog.
+
+=== Triggering Events
+
+When we order a new virtual machine from a service catalog, our request still needs to be approved and matched against our current tenant or group quota. As with virtual machine provisioning, each of the corresponding service provision workflows is triggered by the *request_created* and *request_approved* events, but the request object type is different. It is now a service_template_provision_request.
+
+=== Approval
+
+The approval process for a service provision request starts with the _/System/Policy/ServiceTemplateProvisionRequest_created_ Instance being run as a result of a *request_created* event. This Instance contains two relationships, *rel5* and *rel6*.
+
+The *rel5* relationship performs a service provisioning profile lookup to read the value of the *auto_approval_state_machine* attribute, which by default is _ServiceProvisionRequestApproval_ for a service provision request. 
+
+The *rel6* relationship runs the _Default_ Instance of this state machine. 
+
+[[i1]]
+.ServiceProvisionRequestApproval state machine instance and methods
+image::images/ss2.png[Screenshot,350,align="center"]
+{zwsp} +
+
+The schema for the _ServiceProvisionRequestApproval/Default_ state machine is shown in <<i2>>.
+
+[[i2]]
+.Fields of the ServiceProvisionRequestApproval/Default state machine
+image::images/ss1.png[Screenshot,450,align="center"]
+{zwsp} +
+
+The methods _pending_request_ and _approve_request_ are the same as their counterparts for virtual machine provisioning approval. The default value of _validate_request_ does nothing, so this state machine instance will auto-approve all service provisioning requests. 
+
+==== Customising Approval
+
+If universal auto-approval is not the required behaviour, we can copy the _ServiceProvisionRequestApproval/Default_ state machine methods to our own domain and edit them as necessary. footnote:[Nick Catling from Red Hat has written a nice example of how we can customise service provisioning approval on a per-group basis if we wish. The code is available on his github repository:  https://github.com/supernoodz/CloudForms/tree/master/Approval]
+
+=== Quota
+
+Quota checking for a service provision request uses the same consolidated quota mechanism as described in link:../provisioning_quota_management/chapter.asciidoc[Provisioning Quota Management]. The quota checking process for a service provision request starts with the _/System/Policy/ServiceTemplateProvisionRequest_starting_ Instance being run as a result of a *request_starting* event. This policy Instance runs the _/System/CommonMethods/QuotaStateMachine/quota_ state machine from its *rel2* relationship.
+
+==== Email
+
+In ManageIQ there are no email instances that handle the sending of service "approval denied/pending" and "quota exceeded" emails. We would have to implement this functionality ourselves if we wish to send such emails. 
+
+CloudForms does provide suitable email instances in the RedHat domain, but by default they are not wired in to any policy instances. If we wish to use them we can add a policy instance called __/System/Policy/ServiceTemplateProvisionRequest_denied__ to our own domain. This should contain a relationship to the __/Service/Provisioning/Email/ServiceTemplateProvisionRequest_Denied__ email
+instance in the RedHat domain.
+
+=== Summary
+
+We have seen how the approval and quota checking mechanism for services mirrors that for virtual machines, but uses different policy instances to trigger the workflows. The out-of-the-box approval workflow auto-approves all service requests, but we can copy the instance to our own domain to customise the behaviour if we wish.
+
+In practice we rarely need to customise these workflows. As virtualisation administrators, when we provide a self-service catalog to our users, we generally accept the delegation of control and degree of responsibility that we pass to our users. This is after all one of the many benefits of implementing an Infrastructure as a Service cloud model. We almost certainly allocate quotas, but we rarely need to implement per-order approval as well. The default behavour of auto-approval of all service requests is valid in most situations.
+

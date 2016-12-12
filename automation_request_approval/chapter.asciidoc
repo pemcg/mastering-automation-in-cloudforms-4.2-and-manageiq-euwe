@@ -1,0 +1,242 @@
+[[automation-request-approval]]
+== Automation Request Approval
+
+In link:../calling_automation_using_the_restful_api/chapter.asciidoc[Calling Automation Using the RESTful API] we looked at how external systems can make use of ManageIQ Automate workflows by calling the RESTful API. In the examples we specified `:auto_approve => true` in the REST call so that our requests were immediately processed, however we can only auto-approve our own requests if we authenticate as an admin user.
+
+Embedding admin credentials in our external (calling) scripts is generally considered unwise, but if we still want our automation requests to be auto-approved, what can we do?
+
+Fortunately by this stage in the book we have learned enough to be able to implement our own approval workflow for automation requests. The example in this chapter uses an access control group profile to control which groups can submit auto-approved automation requests.
+
+=== Implementing a Custom Approval Workflow
+
+Our automation request approval workflows will follow a very similar pattern to those for provision request approval, and we'll re-use and adapt several of the components. We'll implement two workflows; one triggered from a *request_created* event, and one from a *request_pending* event (see <<i10>>).
+
+[[i10]]
+.Event-triggered automation request approval workflows
+image::images/workflow.png[Screenshot,400,align="center"]
+{zwsp} +
+
+Before we implement anything we need to create some new Automate datastore components to hold our workflow objects.
+
+==== Namespace
+
+We'll create a new namespace called _Automation_ in our own domain.
+
+==== Group Profile
+
+We'll create a simple variant of the virtual machine provisioning group profile (we can copy this from the ManageIQ domain and edit it). Our profile class will contain two instances (profiles), __Bit63Group_vm_user__ and _.missing_ (see <<i1>>).
+
+[[i1]]
+.Automation approval group profiles
+image::images/ss1.png[Screenshot,350,align="center"]
+{zwsp} +
+
+The profile merely contains the name of the auto-approval state machine instance that will be used to determine whether or not the request is auto-approved. The profile is queried using the message **get_auto_approval_state_machine_instance**, and returns the _Value_ field via a _collect_ as **/state_machine_instance**.
+
+We'll allow members of group _Bit63Group_vm_user_ to have their requests auto-approved, and everyone else (including admins who haven't specified `:auto_approve => true`) will require explicit approval.
+
+The profile for the group _Bit63Group_vm_user_ is shown in <<i2>>.
+
+[[i2]]
+.Profile schema for group Bit63Group_vm_user
+image::images/ss3.png[Screenshot,700,align="center"]
+{zwsp} +
+
+The _.missing_ profile for all other groups is shown in <<i3>>.
+
+[[i3]]
+.Profile schema for .missing
+image::images/ss2.png[Screenshot,700,align="center"]
+{zwsp} +
+
+==== State Machine
+
+We'll create a _StateMachines_ namespace, and a simple variant of the VM _ProvisionRequestApproval_ class. We'll copy the _ProvisionRequestApproval_ class from the ManageIQ domain into ours under the new _StateMachines_ namespace, and call it _AutomationRequestApproval_. We'll copy the associated instances and methods as well (see <<i4>>).
+
+[[i4]]
+.AutomationRequestApproval instances and methods
+image::images/ss4.png[Screenshot,350,align="center"]
+{zwsp} +
+
+===== Instances
+
+The _RequireApproval_ instance has an *approval_type* value of __require_approval__ (see <<i5>>).
+
+[[i5]]
+.Fields of the RequireApproval instance
+image::images/ss5.png[Screenshot,550,align="center"]
+{zwsp} +
+
+The _Auto_ instance is similar, but has an *approval_type* value of __auto__.
+
+[[methods]]
+===== Methods
+
+The _validate_request_ method is as follows:
+
+[source,ruby]
+----
+request = $evm.root['miq_request']
+resource = request.resource
+raise "Automation Request not found" if request.nil? || resource.nil?
+
+$evm.log("info", "Checking for auto_approval")
+approval_type = $evm.object['approval_type'].downcase
+if approval_type == 'auto'
+  $evm.root["miq_request"].approve("admin", "Auto-Approved")
+  $evm.root['ae_result'] = 'ok'
+else
+  msg =  "Request was not auto-approved"
+  resource.set_message(msg)
+  $evm.root['ae_result'] = 'error'
+  $evm.object['reason'] = msg
+end
+----
+
+The _pending_request_ method is as follows:
+
+[source,ruby]
+----
+#
+# This method is executed when the automation request is NOT auto-approved
+#
+# Get objects
+msg = $evm.object['reason']
+$evm.log('info', "#{msg}")
+
+# Raise automation event: request_pending
+$evm.root["miq_request"].pending
+----
+
+The method definition is also given an input parameter with Input Name *reason* and Data Type *string*
+
+The +approve_request+ method is as follows:
+
+[source,ruby]
+----
+#
+# This method is executed when the automation request is auto-approved
+#
+# Auto-Approve request
+$evm.log("info", "AUTO-APPROVING automation request")
+$evm.root["miq_request"].approve("admin", "Auto-Approved")
+----
+
+==== Email Classes
+
+We create an _Email_ class, with an _AutomationRequest_Pending_ instance and method (see <<i6>>).
+
+[[i6]]
+.Email classes and methods
+image::images/ss6.png[Screenshot,350,align="center"]
+{zwsp} +
+
+The method code is copied and adapted as appropriate from the VM _ProvisionRequest_Pending_ method. We specify as the *to_email_address* a user that will act as approver for the automation requests.
+
+The full code for the methods is
+https://github.com/pemcg/oreilly-mastering-cloudforms-automation/tree/master/chapter43/scripts[here]
+
+=== Policies
+
+We need to generate policy instances for two AutomationRequest events, *AutomationRequest_created* and *AutomationRequest_approved*. We copy the standard _/System/Policy_ class to our domain, and add two instances (see <<i7>>).
+
+[[i7]]
+.New policy instances
+image::images/ss7.png[Screenshot,350,align="center"]
+{zwsp} +
+
+==== AutomationRequest_created
+
+Our policy instance for _AutomationRequest_created_ has three entries; an assertion and two relationships. We need to recognise whether an automation request was made with the `:auto_approve => true` parameter. If it was, we need to skip our own approval workflow.
+
+We know (from some investigative debugging using _ObjectWalker_) that when a request is made that specifies `:auto_approve => true`, we have an `$evm.root['automation_request'].approval_state` attribute with a value of **approved**. When a request is made that specifies `:auto_approve => false` this value is **pending_approval**. We can therefore create our assertion to look for `$evm.root['automation_request'].approval_state == 'pending_approval'`, and continue with the instance only if the boolean test returns **true**.
+
+The *rel1* relationship of this instance performs a profile lookup based on our user group, to find the auto-approval state machine instance that should be run. The *rel2* relationship calls this state machine instance (see <<i8>>).
+
+[[i8]]
+.Fields of the AutomationRequest_created instance
+image::images/ss8.png[Screenshot,700,align="center"]
+{zwsp} +
+
+==== AutomationRequest_pending
+
+The _AutomationRequest_pending_ instance contains a single relationship to our _AutomationRequest_pending_ email instance (see <<i9>>).
+
+[[i9]]
+.Fields of the AutomationRequest_pending instance
+image::images/ss9.png[Screenshot,500,align="center"]
+{zwsp} +
+
+=== Testing
+
+We'll submit three automation requests via the RESTful API, calling a simple _Test_ instance. The calls will be made as follows:
+
+* As user __admin__, specifying `:auto_approve => true`
+* As user __admin__, specifying `:auto_approve => false`
+* As a user who is a member of the group _Bit63Group_vm_user_
+
+For the first call, our assertion correctly prevents our custom approval workflow from running (the request has already been auto-approved). From _automation.log_ we see:
+
+....
+Evaluating substituted assertion ["approved" == "pending_approval"]
+Assertion Failed: <"approved" == "pending_approval">
+Followed  Relationship [miqaedb:/System/Policy/AutomationRequest_created#create]
+Followed  Relationship [miqaedb:/System/Policy/request_created#create]
+Followed  Relationship [miqaedb:/System/Event/request_created#create]
+....
+
+For the second call we see that the assertion evaulates to **true**, but the user __admin__'s group (__EVMGroup-super_administrator__) doesn't have a group profile. The +.missing+ profile is used, and the automation request is not auto-approved.
+
+The _admin_ user receives an email:
+
+....
+Request was not auto-approved.
+
+Please review your Request and update or wait for approval from an Administrator.
+
+To view this Request go to: https://192.168.1.45/miq_request/show/125
+
+Thank you,
+Virtualization Infrastructure Team
+....
+
+The _approving_ user also receives an email:
+
+....
+Approver, 
+An automation request received from admin@bit63.com is pending.
+
+Request was not auto-approved.
+
+For more information you can go to: https://192.168.1.45/miq_request/show/125
+
+Thank you,
+Virtualization Infrastructure Team
+....
+
+Clicking the link takes us to an approval page, and we can approve the request, which then continues.
+
+For the third call we see that the assertion evaluates to **true**, but this time we see the valid group profile being used:
+
+....
+Evaluating substituted assertion ["pending_approval" == "pending_approval"]
+Following Relationship [miqaedb:/Automation/Profile/Bit63Group_vm_user#get_auto..
+....
+
+This group's profile auto-approves the automation request, and the _Test_ instance is successfully run:
+
+....
+Q-task_id([automation_task_186]) \
+                          <AEMethod test> Calling the test method was successful!
+....
+
+Success!
+
+=== Summary
+
+In this chapter we've assembled many of the Automate components that we've studied throughout the book to create our own custom approval workflow. We've done it by copying and adapting slightly several existing components in the ManageIQ domain, and adding our own pieces where necessary.
+
+We started off by creating our own namespace to work in, and we added an access control group profile so that we can apply the auto-approval to specific groups. We cloned the _ProvisionRequestApproval_ class and its methods to become our _AutomationRequestApproval_ state machine, and we created two instances, one called _Auto_, and one called _RequireApproval_. We added an _Email_ class and cloned and adapted the _ProvisionRequest_Pending_ instance and method to become our _AutomationRequest_Pending_ versions. Finally we added two policy instances to handle the two Automation *request_created* and *request_pending* events. 
+
+Creating an approval workflow such as this is really just a case of putting the pieces in place and wiring it together. We know that approval workflows start with an event, and that the event is translated to a policy. As long as our policy instances route the workflow into the appropriate handlers (generally a state machine or email class), all that is left is to adapt the method code to our specific purposes, and test.
+

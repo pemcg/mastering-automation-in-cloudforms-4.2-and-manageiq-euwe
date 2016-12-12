@@ -1,0 +1,175 @@
+[[creating-an-ansible-tower-service-catalog-item-and-bundle]]
+== Creating an Ansible Tower Service Catalog Item and Bundle
+
+In this chapter we'll run through practical examples of creating an individual Ansible Tower catalog item, and a catalog bundle to include an Ansible Tower service.
+
+=== Service Catalog Item
+
+First we'll create a service catalog item to run the "Simple LAMP Stack" job template that we developed in link:../running_an_ansible_tower_job_from_a_button/chapter.asciidoc[Running an Ansible Tower Job From a Button].
+
+==== Service Dialog
+
+We need to re-import the "Simple LAMP Stack" Ansible Tower job template as a service dialog as we did previously, but this time we'll leave the "Options" box and "Limit" element in place. We use the limit element to name the VM on which we want to run the service. Once again we'll edit each element in the dialog to deselect the 'Read only" checkbox, and then finally save the new service dialog as "Simple LAMP Stack (Service)" (see <<i1>>).
+
+[[i1]]
+.New service dialog
+image::images/ss1.png[Screenshot,380,align="center"]
+{zwsp} +
+
+==== Catalog Item
+
+We'll create a new service catalog item as we have before, but this time the catalog item type will be "AnsibleTower". We complete the catalog item definition as shown in <<i2>>.
+
+[[i2]]
+.Ansible Tower catalog item
+image::images/ss2.png[Screenshot,700,align="center"]
+{zwsp} +
+
+We'll select the __StateMachines/Provision/default__ state machine as our provisioning entry point.
+
+==== Ordering the Catalog Item
+
+Once created, we can order our new item from the service catalog. We'll see the new service dialog, which we complete with suitable values (see <<i3>>).
+
+[[i3]]
+.Ordering the catalog item
+image::images/ss3.png[Screenshot,450,align="center"]
+{zwsp} +
+
+When we click on *Submit* the job request is passed to Tower, and we can follow the progress of our job in the Tower WebUI.
+
+=== Service Catalog Bundle
+
+We'll now create a service bundle comprising a VM provisioning catalog item, followed by an Ansible configuration catalog item. We'll adapt the Ansible catalog item that we have just created to make it suitable for use as part of a bundle.
+
+==== Service Dialog
+
+We'll edit the "Simple LAMP Stack" service dialog to remove the "Options" box and "Limit" element. We'll add a new box called "Service & VM Details", containing two text box elements named "Service Name" and VM Name (as we did in link:../creating_a_service_catalog_item/chapter.asciidoc[Creating a Service Catalog Item]). The element with the label "Service Name" should have the name "service_name". The element with the label "VM Name" should have the name "option_1_vm_name". We'll save the new service dialog as "CentOS 7 LAMP Server Bundle" (see <<i4>>).
+
+[[i4]]
+.Modified service dialog
+image::images/ss4.png[Screenshot,420,align="center"]
+{zwsp} +
+
+===== Limit Switch
+
+We still need a way of passing the correct limit switch to Ansible Tower when the job is run. For a simple dialog we could have left the "Limit" element as either a static text box, or a dynamically populated text box, with the default value taken from the input to the "VM Name" element. For this example however we're going to be use our knowledge of the Ansible-related automate methods and objects to dynamically set the limit variable (see <<automatically-setting-the-limit-variable>> below).
+
+==== Ansible Tower Catalog Item
+
+We'll make two small changes to the Ansible Tower catalog item. We'll unset the dialog, and change the Provisioning Entry Point to the __StateMachines/Provision/provision_from_bundle__ state machine. The modified catalog item definition is shown in <<i5>>.
+
+[[i5]]
+.Modified Ansible Tower catalog item
+image::images/ss5.png[Screenshot,700,align="center"]
+{zwsp} +
+
+==== Creating the Service Catalog Bundle
+
+Now we can go ahead and create our catalog bundle as we did in link:../creating_a_service_catalog_bundle/chapter.asciidoc[Creating a Service Catalog Bundle]. We'll use the same Provisioning Entry Point of __ManageIQ/Service/Provisioning/StateMachines/ServiceProvision_Template/CatalogBundleInitialization__. When we select the resources for the bundle, we'll pick a generic "CentOS 7.2 Server" catalog item as the VM to be provisioned, and our newly modified "Simple LAMP Stack" Ansible configuration catalog item. We must ensure that the Action Order and Provision Order are set correctly so that the Ansible job template runs after the VM has been provisioned successfully. (see <<i6>>). 
+
+[[i6]]
+.Bundle resources
+image::images/ss6.png[Screenshot,700,align="center"]
+{zwsp} +
+
+[[automatically-setting-the-limit-variable]]
+==== Automatically Setting the Ansible 'limit' variable in a Service Bundle
+
+We need a way of passing the name of the newly provisioned virtual machine to the Ansible Tower job template as the "limit" variable, so that the configuration is applied solely to the new VM. In our example we're prompting the user for the VM name from the service dialog when the service is ordered, and so the VM name will be known in advance. This may not always be the case though; we may be auto-generating our own VM names, for example.
+
+As we discovered in link:../ansible_tower_services/chapter.asciidoc[Ansible Tower Services], both the _default_ and __provision_from_bundle__ state machine instances call a _preprovision_ method that allows us to optionally modify the job options sent to Tower. We'll use this facility to add our own code that navigates though the object structure to extract the `:vm_target_name` value from the options hash in the previous VM provisioning operation. By using this value for our "limit" variable, we ensure that the job template limit switch is set correctly (and automatically), regardless of the way that the VM name was created.
+
+
+Our code will search for a ServiceTemplateProvisionTask with a `provision_priority` attribute one less than our own. Having found this 'prior' ServiceTemplateProvisionTask, it will then follow the associations through its child and grandchild task(s) to find the options hash. (see also link:../the_service_provisioning_state_machine/chapter.asciidoc[The Service Provisioning State Machine] and link:../service_objects/chapter.asciidoc[Service Objects] for descriptions of these objects). The navigation path is shown in <<i7>>.
+
+{zwsp} +
+[[i7]]
+.Navigating through the service model objects
+image::images/objects.png[Screenshot,700,align="center"]
+{zwsp} +
+
+===== Preparation
+
+We'll clone the __/ConfigurationManagement/AnsibleTower/Service/Provisioning/StateMachines/Provision/provision_from_bundle__ state machine to our own domain, and replace the *Method::preprovision* line by *Method::preprovision_from_bundle*, as follows:
+
+[[i8]]
+.Modified provision_from_bundle state machine
+image::images/ss7.jpg[Screenshot,700,align="center"]
+{zwsp} +
+
+Now we'll copy the __/ConfigurationManagement/AnsibleTower/Service/Provisioning/StateMachines/Provision/preprovision__ method into our domain, rename it as __preprovision_from_bundle__, and edit it as follows.
+
+We'll add a new method `prior_service_vm_names`, which performs the navigation around the service model objects. The code is as follows: 
+
+[source,ruby]
+----
+def prior_service_vm_names
+  vm_names = []
+  unless task.provision_priority.zero?
+    prior_task = task.miq_request_task.miq_request_tasks.find do |miq_request_task|
+      miq_request_task.provision_priority == task.provision_priority - 1
+    end
+    unless prior_task.nil?
+      prior_task.miq_request_tasks.each do |child_task|
+        child_task.miq_request_tasks.each do |grandchild_task|
+          vm_names << grandchild_task.get_option(:vm_target_name)
+        end
+      end
+    end
+  end
+  vm_names
+end
+----
+
+We'll edit the `modify_job_options` method to call `prior_service_vm_names`, as follows:
+
+[source,ruby]
+----
+def modify_job_options(service)
+  job_options         = service.job_options
+  limit_names         = prior_service_vm_names
+  job_options[:limit] = limit_names.join(",") unless limit_names.empty?
+  service.job_options = job_options
+end
+----
+
+Finally we uncomment the call to `modify_job_options` in the `main` method, as follows:
+
+[source,ruby]
+----
+def main  
+  @handle.log("info", "Starting Ansible Tower Pre-Provisioning")  
+  examine_request(service)  
+  modify_job_options(service)  
+end
+----
+
+==== Ordering the Catalog Bundle
+
+We can order our new bundle from the self-service WebUI catalog (see <<i10>>). 
+
+[[i10]]
+.Self-service WebUI service catalog
+image::images/ss10.png[Screenshot,550,align="center"]
+{zwsp} +
+
+We'll see the new service dialog, which we complete with suitable values, and add to the shopping cart (see <<i9>>).
+
+[[i9]]
+.Ordering the catalog bundle
+image::images/ss9.png[Screenshot,600,align="center"]
+{zwsp} +
+
+When we *Order* the contents of the shopping cart, the VM provisioning request begins. Once this has completed the Ansible job request is passed to Tower, and we can follow the progress of our job in the Tower WebUI. We see that the limit switch has been set correctly according to the VM name discovered by our __preprovision_from_bundle__ method (see <<i11>>).
+
+[[i11]]
+.Ansible job results
+image::images/ss11.png[Screenshot,600,align="center"]
+{zwsp} +
+
+=== Summary
+
+These practical examples have shown the relative simplicity with which we can create CloudForms or ManageIQ services that launch Ansible Tower configuration jobs. We have seen how we can combine a provisioning service for a generic VM, with a configuration service that turns the VM into a specific server role.
+
+When creating service bundles in this way we frequently pair together VM provision with Ansible configuration catalog items, and even form bundles out of several of these pairings. The modified __preprovision_from_bundle__ method that we created will always forward the virtual machine name from the immediately prior VM provision to Tower. As long as we configure the provision order correctly when adding resources to the bundle, we can be sure that the limit variable will be set as required, and that the configuration will be applied to the most recently provisioned virtual machine.

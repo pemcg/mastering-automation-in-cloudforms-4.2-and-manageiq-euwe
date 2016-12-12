@@ -1,0 +1,36 @@
+[[service-tips-and-tricks]]
+== Service Tips and Tricks
+
+There are three useful tips and tricks to be aware of when developing services, and we'll discuss them here.
+
+=== Test Virtual Machine Provisioning First
+
+Before developing a service catalog item to provision a virtual machine, test that an interactive provision (*Infrastructure -> Virtual Machines -> Lifecycle -> Provision VMs*) from the same virtual machine template, using the same virtual machine settings, works successfully.
+
+This should include the same placement type (auto or manually selected), and the same CPU count and memory size ranges that will be offered from the service dialog.
+
+Troubleshooting a failing interactive VM provision is simpler than troubleshooting a failing service order.
+
+=== Re-Create the Service Item if the Template Changes
+
+If any changes are made to the template that would result in a new internal template ID, then the service catalog item must be re-created (even if the new template has the same name as the old). The new template will be represented by a new object in the VMDB, so the service provision request template will need to be re-created with the new template ID.
+
+=== Custom State Machines
+
+There are times when an out-of-the-box service provision state machine does not provide the flexibility that we need to create the service that we require. An example of this would be wishing to present a service dialog offering a selection of VM templates to provision the new VM from (by default this is selected and fixed when the catalog item is created). Fortunately we are not constrained to use the as-supplied state machines.
+
+When we create a new service catalog item, we are presented with a drop-down list of catalog item types to choose from (see <<i1>>).
+
+[[i1]]
+.Selection of Catalog Item Type
+image::images/ss1.png[Screenshot,420,align="center"]
+{zwsp} +
+
+As <<i1>> shows there's a *Generic* selection that we can use. If we select this catalog item type, we can create our own custom instance of the _ServiceProvision_Template_ state machine class. This can handle the parsing of any service catalog elements, and assemble arguments for a call to `$evm.execute('create_provision_request')` to complete the VM provision. (see link:../creating_provisioning_requests_programmatically/chapter.asciidoc[Creating Programming Requests Programmatically]).
+
+By hand-rolling the arguments to +create_provision_request+ in this way, we have complete control over the VM provision request. We could easily prompt the user for the template name to provision from, or the number of VMs to provision with the request for example.footnote:[The https://github.com/ramrexx/CloudForms_Essentials[CloudForms Essentials] repository has several examples of such custom state machines that we can use or adapt.]
+
+=== Summary
+
+This chapter has shown us three simple tips to consider when working with services.
+Generic services, in particular, are useful if we wish to create a single service catalog item to provision a new virtual machine into a choice of providers (such as VMware or OpenStack). With a traditional service catalog item, we must select a template first, and this decides the destination provider. With a Generic service type, we can present our users with a list of VMware templates or OpenStack Glance images to choose from at runtime. Depending on the template or image selected, we can then supply the appropriate provider-specific arguments to `$evm.execute('create_provision_request')` in order to complete the request.

@@ -1,0 +1,182 @@
+[[creating-a-service-catalog-bundle]]
+== Creating a Service Catalog Bundle
+
+We learnt in link:../creating_a_service_catalog_item/chapter.asciidoc[Creating a Service Catalog Item] how to create service catalog items that enable our users to provision fully configured virtual machines from a single *Order* button.
+
+We can populate our service catalog with useful items (see <<i1>>).
+
+[[i1]]
+.Service catalog containing three services
+image::images/ss1.png[Screenshot,600,align="center"]
+{zwsp} +
+
+In these examples the virtual machines are provisioned from fully installed VMware templates, preconfigured with the application packages. The service dialog purely prompts for the Service and VM Names (see <<i2>>).
+
+[[i2]]
+.Service dialog for each catalog item
+image::images/ss2.png[Screenshot,400,align="center"]
+{zwsp} +
+
+The next logical step is to be able to provision several items together as a single __service catalog bundle__.
+
+=== Creating the Service Dialog for the Bundle
+
+When we create a service catalog bundle, we handle the dialog input for each of the catalog items in a single service dialog that we create for the bundle. For our Web, Middleware and Database Server items, we must prompt for the VM name of each, but we'll also prompt for a service name (see <<i3>>).
+
+[[i3]]
+.Service dialog for a catalog bundle
+image::images/ss3.png[Screenshot,400,align="center"]
+{zwsp} +
+
+We name the dialog elements according to the sequence in which we want our individual items provisioned. Our sequence will be:
+
+1.  Database Server
+2.  Middleware Server
+3.  Web Server
+
+Our four dialog elements are therefore constructed as follows. We'll create a text box element to prompt for Service Name (see <<i4>>).
+
+[[i4]]
+.Dialog element to prompt for service name
+image::images/ss4.png[Screenshot,400,align="center"]
+{zwsp} +
+
+We add a second text box element to prompt for Web Server Name (see <<i5>>).
+
+[[i5]]
+.Dialog element to prompt for web server name
+image::images/ss5.png[Screenshot,400,align="center"]
+{zwsp} +
+
+We add a third text box element to prompt for Middleware Server Name (see <<i6>>).
+
+[[i6]]
+.Dialog element to prompt for middleware server name
+image::images/ss6.png[Screenshot,400,align="center"]
+{zwsp} +
+
+Finally we add a fourth text box element to prompt for Database Server Name (see <<i7>>).
+
+[[i7]]
+.Dialog element to prompt for database server name
+image::images/ss7.png[Screenshot,400,align="center"]
+{zwsp} +
+
+The number in the element name reflects the sequence number, and the _CatalogItemInitialization_ and _CatalogBundleInitialization_ methods use this sequence number to pass the dialog value to the correct grandchild miq_request_task (see link:../the_service_provisioning_state_machine/chapter.asciidoc[The Service Provisioning State Machine]).
+
+The value *option_<n>_vm_name* is recognised and special-cased by _CatalogItemInitialization_, which sets both the `:vm_target_name` and `:vm_target_hostname` keys in the miq_request_task's options hash to the value input. 
+
+The `:vm_target_name` key sets the name of the resulting virtual machine. 
+
+The `:vm_target_hostname` key can be used to inject a Linux _hostname_ (i.e. FQDN) into a VMware Customization Specification, which can then set this in the virtual machine using VMware Tools on firstboot.
+
+=== Preparing the Service Catalog Items
+
+As we will be handling dialog input when the bundle is ordered, we need to edit each catalog item to set the *Catalog* to *<Unassigned>*, and the *Dialog* to *<No Dialog>*. We also _deselect_ the *Display in Catalog* option as we no longer want this item to be individually orderable (see <<i8>>).
+
+[[i8]]
+.Preparing the existing service catalog items
+image::images/ss8.png[Screenshot,700,align="center"]
+{zwsp} +
+
+Once we've done this, the items will appear as **Unassigned** (see <<i9>>).
+
+[[i9]]
+.Unassigned catalog items
+image::images/ss9.png[Screenshot,280,align="center"]
+{zwsp} +
+
+=== Creating the Service Catalog Bundle
+
+Now we can go ahead and create our catalog bundle. Highlight a catalog name, and select **Configuration -> Add a New Catalog Bundle** (see <<i10>>).
+
+[[i10]]
+.Adding a new catalog bundle
+image::images/ss10.png[Screenshot,500,align="center"]
+{zwsp} +
+
+Enter a name and description for the bundle, then select the *Display in Catalog* checkbox. Select an appropriate catalog, and the newly created bundle dialog, from the appropriate drop-downs.
+
+For the Provisioning Entry Point, navigate to  __ManageIQ/Service/Provisioning/StateMachines/ServiceProvision_Template/CatalogBundleInitialization__ (see <<i12>>).
+
+[[i12]]
+.Service bundle basic info
+image::images/ss11.png[Screenshot,700,align="center"]
+{zwsp} +
+
+Click on the *Details* tab, and enter some HTML-formatted text to describe the catalog item to anyone viewing in the catalog.
+
+[source,html]
+----
+<h1>Three Tier Intranet Server Bundle</h1>  
+<hr>  
+<p>Deploy a <strong>Web, Middleware</strong> and <strong>Database</strong> 
+                 server together as a single service</p>
+----
+
+Click on the *Resources* tab, and select each of the three unassigned catalog items to add them to the bundle (see <<i13>>).
+
+[[i13]]
+.Adding resources to the bundle
+image::images/ss12.png[Screenshot,450,align="center"]
+{zwsp} +
+
+Change the *Action Order* and *Provisioning Order* according to our desired sequence ('3' won't be visible until '2' is set for an option) see <<i14>>. The sequence should match the *option_<n>_vm_name* sequence that we gave our dialog elements.
+
+[[i14]]
+.Setting the action and provision orders
+image::images/ss13.png[Screenshot,700,align="center"]
+{zwsp} +
+
+Finally click the *Add* button.
+
+Select a suitable sized icon for a custom image, and save.
+
+=== Ordering the Catalog Bundle
+
+Navigate to the *Service Catalogs* section in the accordion, expand the *Intranet Services* catalog, and highlight the *Three Tier Intranet Server Bundle* catalog item (see <<i16>>).
+
+[[i16]]
+.Ordering the catalog bundle
+image::images/ss14.png[Screenshot,,align="center"]
+{zwsp} +
+
+Click **Order**, and fill out the service dialog values (see <<i17>>).
+
+[[i17]]
+.Entering the service and server names in the service dialog
+image::images/ss15.png[Screenshot,400,align="center"]
+{zwsp} +
+
+Click *Submit*
+
+After a new minutes, the new service should be visible in **My Services**, containing the new VMs (see <<i18>>).
+
+[[i18]]
+.The completed service
+image::images/ss16.png[Screenshot,650,align="center"]
+{zwsp} +
+
+If we weren't watching the order that the VMs were created in, we could look in the database to check that our desired provisioning sequence was followed:
+
+....
+vmdb_production=# select id,name from vms order by id asc;
+      id       |                     name
+---------------+----------------------------------------------
+...
+ 1000000000177 | jst-db01
+ 1000000000178 | jst-mid01
+ 1000000000179 | jst-web01
+....
+
+Here we see that the VMs were created (and named) in the correct order.
+
+=== Summary
+
+This has been a useful example that shows the flexibility of service catalogs to deploy entire application bundles. When we link this concept to a configuration management tool such as Puppet running from Red Hat Satellite 6, we start to really see the power of automation in our enterprise. We can deploy complex workloads from a single button click.
+
+One of the cool features of service bundles is that we can mix and match catalog items that provision into different providers. For example we may have a Bimodal IT footnote:[http://www.gartner.com/it-glossary/bimodal/] infrastructure comprising RHEV for our traditional Mode 1 workloads, and an in-house OpenStack private cloud for our more cloud-ready Mode 2 workloads. Using service bundles we could provision our relatively static servers into RHEV, and our dynamically scalable mid-tier and frontend servers into OpenStack.
+
+==== Further Reading
+
+http://talk.manageiq.org/t/filtering-out-service-catalog-items-during-deployment/725[Filtering out service catalog items during deployment]

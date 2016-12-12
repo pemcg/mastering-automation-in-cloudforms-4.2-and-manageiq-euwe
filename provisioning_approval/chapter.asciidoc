@@ -1,0 +1,106 @@
+[[approval]]
+== Approval
+
+A newly provisioned virtual machine consumes resources in a virtual infrastructure, and potentially costs money in a public cloud. To control the consumption of resources and keep cloud costs in check, an approval stage is built into the virtual machine and instance provisioning workflow. By default requests for single small virtual machines are auto-approved, but attempts to provision larger or multiple VMs are redirected for administrative approval. 
+
+This chapter describes the approval process, and shows how we can fine-tune the approval thresholds based on number of VMs, number of CPUs, or amount of memory in the request.
+
+=== Approval Workflow
+
+The provision request approval workflows are triggered by the *request_created* and *request_pending* events (see <<i5>>).
+
+[[i5]]
+.Event-triggered provision request approval workflows
+image::images/approval_workflow.png[Screenshot,350,align="center"]
+{zwsp} +
+
+==== Request Created Event
+
+The approval workflow for a virtual machine provision request is entered as a result of the _/System/Policy/MiqProvisionRequest_created_ policy instance being run from a *request_created* event. This policy instance contains two relationships, *rel5* and *rel6*.
+
+The *rel5* relationship performs a group profile lookup to read the value of the *auto_approval_state_machine* attribute, which by default is _ProvisionRequestApproval_ for an infrastructure virtual machine or cloud instance provision request. 
+
+The *rel6* relationship runs the _Default_ instance of this state machine (see <<i1>>).
+
+[[i1]]
+.The ProvisionRequestApproval state machine instances and methods
+image::images/ss1.png[Screenshot,350,align="center"]
+{zwsp} +
+
+The _Default_ instance of the ProvisionRequestApproval state machine has the Field values shown in <<i2>>.
+
+[[i2]]
+.The ProvisionRequestApproval/Default instance
+image::images/ss2.png[Screenshot,700,align="center"]
+{zwsp} +
+
+This instance will auto-approve any VM provisioning request containing a single VM, but requests for more than this number will require explicit approval from an Administrator, or anyone in a group with the role *EvmRole-approver* (or equivalent).
+
+==== Methods
+
+The ProvisionRequestApproval state machine uses three methods to perform the validation.
+
+===== validate_request
+
+The _validate_request_ method is run from *On Entry* field of the *ValidateRequest* state. It checks the provisioning request against the schema *max_* attributes, and if the request doesn't exceed these maxima, the method exits cleanly. If the request does exceed the maxima, the method sets `$evm.root['ae_result'] = 'error'` and a reason message before exiting.
+
+===== pending_request
+
+The _pending_request_ method is run from the *On Error* field of the *ValidateRequest* state. This will be run if _validate_request_ exits with `$evm.root['ae_result'] = 'error'`. The method is simple, and merely raises a *request_pending* event to trigger the _MiqProvisionRequest_pending_ policy instance:
+
+[source,ruby]
+----
+# Raise automation event: request_pending
+$evm.root["miq_request"].pending
+----
+
+===== approve_request
+The _approve_request_ method is run from the *On Entry* field of the *ApproveRequest* state. This will be run if _validate_request_ exits cleanly. This is another very simple method that merely auto-approves the request:
+
+[source,ruby]
+----
+# Auto-Approve request
+$evm.log("info", "AUTO-APPROVING")
+$evm.root["miq_request"].approve("admin", "Auto-Approved")
+----
+==== Request Pending Event
+
+If the _ProvisionRequestApproval_ state machine doesn't approve the request, it calls `$evm.root["miq_request"].pending`, which triggers a *request_pending* event. This is the trigger point into the second workflow through the _MiqProvisionRequest_pending_ policy instance. This instance sends the emails to the requester and approver, notifying that the provisioning request has not been auto-approved, and needs manual approval.
+
+=== Overriding the Defaults
+
+We can copy the _Default_ instance (including path) to our own domain and change or set any of the auto-approval schema Attributes - that is, **max_cpus**, **max_vms**, *max_memory* or **max_retirement_days**. Our new values will then be used when the next virtual machine is provisioned.
+
+==== Template Tagging
+
+We can also override the auto-approval **max_*** values stored in the _ProvisionRequestApproval_ state machine on a per-template basis, by applying tags from one or more of the following tag categories to the template:
+
+[options="header"]
+|=======================
+| Tag Category Name | Tag Category Display Name 
+| prov_max_cpu | Auto Approve - Max CPU 
+| prov_max_memory | Auto Approve - Max Memory 
+| prov_max_retirement_days | Auto Approve - Max Retirement Days 
+| prov_max_vm | Auto Approve - Max VM 
+|=======================
+
+If a template is tagged in such a way, then any VM provisioning request _from_ that template will result in the template's tag value being used for auto-approval considerations, rather than the attribute value from the schema.
+
+=== VM Provisioning-Related Email
+
+There are four email instances with corresponding methods that are used to handle the sending of VM provisioning-related emails. The instances each have the attributes **to_email_address**, *from_email_address* and *signature* which we can (and should) customise, after copying the instances to our own domain.
+
+[[i4]]
+.Copying and editing the approval email schema fields
+image::images/ss3.png[scale="50"]
+{zwsp} +
+
+Three of the instances are approval-related. The *to_email_address* value for the _MiqProvisionRequest_Pending_ instance should contain the email address of a user (or mailing list) who is able to login to the ManageIQ appliance as an Administrator or as a member of a group with the *EvmRole-approver* role or equivalent (see <<i4>>).
+
+=== Summary
+
+This chapter shows how the virtual machine provisioning workflow allows for the approval stage to filter requests for large virtual machines, while auto-approving small requests. This simplifies our life as virtualisation administrators considerably. It allows us to retain a degree of control over large resource requests, even allowing us to define our own concept of 'large' by setting schema attributes accordingly. It also allows us to delegate responsibility for small virtual machine requests to our standard users. Automation allows us to intervene for the exceptional cases, yet auto-approve the ordinary "business as usual" requests.
+
+We have also seen how we can fine-tune these approval thresholds on a per-template basis, so that if some of our users have valid reasons to provision large virtual machines from specific templates, we can allow them to without interruption.
+
+The approval state machine and methods are a good example of the utility of defining thesholds as schema attributes or by using tags. We can customise the approval process to our own requirements without the need to write or edit any Ruby code.

@@ -1,0 +1,106 @@
+[[catalogitembundleinitialization]]
+== Catalog{Item,Bundle}Initialization
+
+In link:../the_service_provisioning_state_machine/chapter.asciidoc[The Service Provisioning State Machine] we saw that two of the service provisioning state machines instances are called _CatalogItemInitialization_ and _CatalogBundleInitialization_. These two state machines greatly simplify the process of creating service catalog items and bundles, fronted by rich service dialogs, without the need for any Ruby scripting.
+
+[NOTE]
+A service catalog _item_ generally provisions a single type of virtual machine (although it may result in multiple VMs of the same type being provisioned). A service catalog _bundle_ can provision multiple service items in one go, allowing us to deploy multitier server workloads from a single click.
+
+In this chapter we'll take a look at these two state machine instances in detail. We'll see how they allow us to name our service dialog elements in such a way that values are automatically passed into the provisioning workflow, with no need for further automation scripting.
+
+=== CatalogItemInitialization
+
+We can specify the _CatalogItemInitialization_ state machine as the provisioning entry point when we create a service catalog item.
+
+The state machine has been written to simplify the process of customising the provisioned VMs, using values read from the service dialog. It does this by setting options hash values or tags in the child and grandchild `miq_request_task` objects, from specially constructed service dialog element names. It also allows us to specify a new unique name and description for the resulting service.
+
+The schema for the _CatalogItemInitialization_ instance is shown in <<i1>>.
+
+[[i1]]
+.The fields of the CatalogItemInitialization state machine instance
+image::images/ss1.png[Screenshot,600,align="center"]
+{zwsp} +
+
+We can see that the schema uses the *pre1* state to add a dialog parser (common between the _CatalogItemInitialization_ and _CatalogBundleInitialization_ state machines). It also uses the *pre2* state to specify the _CatalogItemInitialization_ method, which sets the child object options hash values and/or tags accordingly.
+
+The _CatalogItemInitialization_ method itself relies on the dialog inputs having been parsed correctly by _dialog_parser_, and this requires us to use a particular naming convention for our service dialog elements.
+
+==== Service Dialog Element Naming Convention
+
+To perform the service dialog -> options_hash or tag substitution correctly, we must name our service dialog elements in a particular way.
+
+===== Single options hash key
+
+The simplest service dialog element to process is one that prompts for the value of a single options hash key. We name the service dialog element as:
+
+*option_0_key_name_* (for backwards compatibility with CloudForms 3.1/ManageIQ _Anand_)
+
+or just
+
+*_key_name_* (valid for CloudForms 3.2/ManageIQ _Botvinnik_ and later)
+
+For example we can create a service dialog element as shown in <<i2>>.
+
+[[i2]]
+.Service dialog element to prompt for an options hash key
+image::images/ss2.png[Screenshot,420,align="center"]
+{zwsp} +
+
+The resulting value input from this dialog at runtime will be propagated to the child task's options hash as:
+
+[source,ruby]
+....
+miq_request_task.options[:vm_memory]
+....
+
+The '0' in the dialog name refers to the item sequence number when provisioning. For a service dialog fronting a single catalog _item_ this will always be zero. For a service dialog fronting a catalog _bundle_ comprising several items, the sequence number indicates which of the component items the dialog option should be passed to (an element with a name sequence of '0' will be propagated to all items).
+
+Several *key_name* values are recognised and special-cased by the _CatalogItemInitialization_ method. We can name a text box element as either *vm_name* or *vm_target_name*, and the resulting text string input value will be propagated to all of:
+
+[source,ruby]
+....
+miq_request_task.options[:vm_target_name]
+miq_request_task.options[:vm_target_hostname]
+miq_request_task.options[:vm_name]
+miq_request_task.options[:linux_host_name]
+....
+
+If we name a text box element as *service_name*, then the resulting service will be named from the text value of this element.
+
+If we name a text box element as *service_description*, then the resulting service description will be updated from the text value of this element.
+
+===== Single tag
+
+We can also create a text box service dialog element to apply a single tag. The naming format is similar to that of naming an option, but using a prefix of "tag_", and a suffix of the tag category name.
+
+For example we can prompt for a tag in the *department* category by naming the service dialog element as *tag_0_department* (see <<i3>>).
+
+[[i3]]
+.Service dialog element to prompt for a tag value
+image::images/ss3.png[Screenshot,420,align="center"]
+{zwsp} +
+
+The value input into the service dialog element at runtime should be a tag within this tag category. When an element of this type is processed by the _CatalogItemInitialization_ method, if either the category or tag doesn't currently exist, it will be created.
+
+=== CatalogBundleInitialization
+
+The _CatalogBundleInitialization_ state machine should be specified when we create a service catalog _bundle_.
+
+The schema for the _CatalogBundleInitialization_ instance is the same as for _CatalogItemInitialization_, except that the *pre2* stage calls the _CatalogBundleInitialization_ method.
+
+The _CatalogBundleInitialization_ method passes the service dialog element values on to each catalog item's _CatalogItemInitialization_ method, which is still required in order to set the miq_request_task's options hash keys for the provision of that catalog item.
+
+=== Summary
+
+This chapter has introduced the two service provision state machines that we can use to create service catalog items and bundles, with no need for any Ruby scripting. We can create simple but impressive service catalogs in minutes using these entry points, and we see a practical example of this in link:../creating_a_service_catalog)item/chapter.asciidoc[Creating a Service Catalog Item].
+
+==== Further Reading
+
+It is worth familiarising ourselves with the three methods that perform the parsing and transposing of the dialog values. These are DialogParser, CatalogItemInitialization and CatalogBundleInitialization.
+
+https://github.com/ManageIQ/manageiq/blob/capablanca/db/fixtures/ae_datastore/ManageIQ/Service/Provisioning/StateMachines/Methods.class/__methods__/dialog_parser.rb[DialogParser Method]
+
+https://github.com/ManageIQ/manageiq/blob/capablanca/db/fixtures/ae_datastore/ManageIQ/Service/Provisioning/StateMachines/Methods.class/__methods__/catalogiteminitialization.rb[CatalogItemInitialization Method]
+
+https://github.com/ManageIQ/manageiq/blob/capablanca/db/fixtures/ae_datastore/ManageIQ/Service/Provisioning/StateMachines/Methods.class/__methods__/catalogbundleinitialization.rb[CatalogBundleInitialization Method]
+

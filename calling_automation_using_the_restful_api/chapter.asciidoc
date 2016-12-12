@@ -1,0 +1,181 @@
+[[calling-automation-from-the-restful-api]]
+== Calling Automation Using the RESTful API
+
+Our first look at the integration capabilities of CloudForms and ManageIQ examines how external systems can make _inbound_ calls to an appliance to run Automate instances using the RESTful API.footnote:[We need to enable the _Web Services_ server role on any of our appliances to which we wish to make RESTful calls]
+
+Being able to call automation in this way enables our workflows to be utilised by other enterprise tools in a number of ways. For example organisations may wish to use a help-desk ticketing system as their starting point for new virtual machine provisioning requests. The ticketing system can make a RESTful call to Automate to initiate the workflow.
+
+=== API Entry Point
+
+We can call any Automate instance from the RESTful API, by issuing a  +POST+ call to **/api/automation_requests** and enclosing a JSON-encoded parameter hash such as the following:
+
+[source,ruby]
+----
+post_params = {
+  :version => '1.1',
+  :uri_parts => {
+    :namespace => 'ACME/General',
+    :class => 'Methods',
+    :instance => 'HelloWorld'
+  },
+  :requester => {
+    :auto_approve => true
+  }
+}.to_json
+----
+
+We can call the RESTful API from an external Ruby script by using the `rest-client` gem. As before we'll request an authentication token, and then use that with subsequent calls:
+
+[source,ruby]
+----
+api_uri = 'https://myserver/api'
+url = URI.encode(api_uri + '/auth')
+rest_return = RestClient::Request.execute(
+                          method:    :get,
+                          url:        url,
+                          :user       => username,
+                          :password   => password,
+                          :headers    => {:accept => :json},
+                          verify_ssl: false)
+auth_token = JSON.parse(rest_return)['auth_token']
+----
+
+Having received the authentication token we can make the automation request call with our `post_params` payload:
+
+[source,ruby]
+----
+url = URI.encode(api_uri + '/automation_requests')
+rest_return = RestClient::Request.execute(
+                          method:    :post,
+                          url:        url,
+                          :headers    => {:accept        => :json, 
+                                          'x-auth-token' => auth_token},
+                          :payload    => post_params,
+                          verify_ssl: false)
+result = JSON.parse(rest_return)
+----
+
+The request ID is returned to us in the result from the initial call:
+
+[source,ruby]
+----
+request_id = result['results'][0]['id']
+----
+
+We call poll this to check on status:
+
+[source,ruby]
+----
+url = URI.encode(api_uri + "/automation_requests/#{request_id}")
+rest_return = RestClient::Request.execute(
+                          method:    :get,
+                          url:        url,
+                          :headers    => {:accept        => :json, 
+                                          'x-auth-token' => auth_token},
+                          verify_ssl: false)
+result = JSON.parse(rest_return)
+request_state = result['request_state']
+until request_state == "finished"
+  puts "Checking completion state..."
+  rest_return = RestClient::Request.execute(
+                            method:     :get,
+                            url:        url,
+                            :headers    => {:accept        => :json, 
+                                            'x-auth-token' => auth_token},
+                            verify_ssl: false)
+  result = JSON.parse(rest_return)
+  request_state = result['request_state']
+  sleep 3
+end
+----
+
+=== Returning Results to the Caller
+
+The automation request's options hash is included in the return from the +RestClient::Request+ call, and we can use this to our advantage, by using +set_option+ to add return data in the form of key/value pairs to the options hash from our called automation method.
+
+For example from the _called_ (Automate) method we can include the following:
+
+[source,ruby]
+----
+automation_request = $evm.root['automation_task'].automation_request
+automation_request.set_option(:return, JSON.generate({:status => 'success',
+                                                      :return => some_data}))
+----
+
+From the _calling_ (external) method we can then parse the +return+ key from the returned options hash, and print the contents, as follows:
+
+[source,ruby]
+----
+result = JSON.parse(rest_return)
+puts "Results: #{result['options']['return'].inspect}"
+----
+
+Using this technique we can write our own pseudo-API calls for CloudForms or ManageIQ to handle anything that the standard RESTful API doesn't support. We implement the "API" using a standard Automate method, call it using the RESTful automate call, and we can pass parameters to, and retrieve result back from the called method.
+
+=== Authentication and auto_approve
+
+When we make a RESTful call, we must authenticate using a valid username and password, (or subsequent authentication token). This user must be an admin or equivalent if we wish to specify an `:auto_approve` value of `true` in our calling arguments (only admins can auto-approve automation requests).
+
+If we try making a RESTful call as a non-admin user, the automation request will be blocked, pending approval (as expected). If we want to submit an auto-approved automation request as a non-admin user, we would need to write our own approval workflow (see link:../automation_request_approval/chapter.asciidoc[Automation Request Approval]).
+
+=== Zone Implications
+
+When we submit an automation request via the API, by default the Automate task is queued on the same appliance that the web service is running on. This will be dequeued to run by any appliance with the _Automation Engine_ role set **in the same zone**. If we have separated out our WebUI/web service appliances into a separate zone, this may not necessarily be our desired behaviour.
+
+We can add the parameter `:miq_zone` to the automation request to override this:
+
+[source,ruby]
+----
+  :requester => {
+    :auto_approve => true
+  },
+  :parameters => {
+     :miq_zone => 'Zone Name'
+  }
+----
+
+The behaviour of this parameter is as follows:
+
+1.  If the parameter is not passed the request should use the zone of the server that receives the request.
+2.  If passed but empty (e.g. `'parameters' => "miq_zone="`) the zone should be set to +nil+ and any appliance can process the request.
+3.  Passed a valid zone name parameter (e.g. `'parameters' => "miq_zone=Test"`) should process the work in the "Test" zone.
+4.  Passing an invalid zone name should raise an error of *unknown zone <Zone_name>* back to the caller.
+
+=== run_via_api
+
+The accompanying code https://github.com/pemcg/mastering-automation-in-cloudforms-and-manageiq/blob/4.1/darga/scripts/chapter42/scripts[here] contains an example script called _run_via_api.rb_ that can be used to call any Automate instance, using arguments to pass server name, credentials, and URI parameters to the instance to be called. Its usage is as follows:
+
+----
+Usage: run_via_api.rb [options]
+    -s, --server server              Server to connect to
+    -u, --username username          Username to connect as
+    -p, --password password          Password
+    -d, --domain                     Domain
+    -n, --namespace                  Namespace
+    -c, --class                      Class
+    -i, --instance                   Instance
+    -P, --parameter <key,value>      Parameter (key => value pair) for the instance
+    -h, --help
+----
+
+Edit the default values for server, username and password if required. Run the script as:
+
+----
+./run_via_api.rb -s cloudforms01 -u miqadmin -p password -d ACME -n General \
+-c Methods -i AddNIC2VM -P vm_id,1000000000195 -P nic_name,nic1 -P nic_network,vlan_712
+----
+
+=== Summary
+
+This chapter has examined how we can make RESTful API calls into Automate, and if necessary return results back to the caller. This is a very powerful feature that lets us harness the power of Automate from external systems.
+
+We can implement bidirectional workflows for example, whereby a CloudForms or ManageIQ appliance can make outgoing calls to integrate with some other enterprise tool, perhaps to initiate an asynchronous action that may take some time to complete. We can implement callback routines as REST-callable Automate instances that can be called to signal that the external processing has finished.
+
+
+==== Further Reading
+
+https://github.com/ManageIQ/manageiq_docs/blob/master/api/reference/automation_requests.adoc[API Reference - Automation Requests]
+
+https://github.com/ManageIQ/manageiq_docs/blob/master/api/examples/automation_request.adoc[Trigger a Single Automation Request]
+
+https://github.com/ManageIQ/manageiq_docs/blob/master/api/examples/automation_requests.adoc[Trigger Multiple Automation Requests]

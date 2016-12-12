@@ -1,0 +1,230 @@
+:numbered!:
+[preface]
+== Preface
+
+Red Hat CloudForms, and its "upstream" sibling ManageIQ, are powerful cloud management platforms that allows us to efficiently manage our virtual infrastructure and Infrastructure as a Service (IaaS) clouds. A significant part of this efficiency comes from automating many of the day-to-day tasks that would otherwise require manual involvement, or time-consuming and possibly error-prone repetitive steps. 
+
+This book is an introduction and how-to guide to working with the _Automate_ feature of CloudForms 4.1 and its corresponding ManageIQ release _Darga_.
+
+Automate simplifies our lives and increases our operational efficiency. It allows us to do such things as:
+
+* Eliminate many of the manual decisions and operations involved in provisioning virtual machines and cloud instances.
+* Load-balance our virtual machines across our virtual infrastructure to match our organisation's way of working, be it logical (e.g. cost centre, department), operational (e.g. infrastructure lifecycle environment), or categorical (e.g. server role or virtual machine characteristic). 
+* Create service catalogs to allow our users to provision virtual machines from a single _Order_ button.
+* Create auto-scalable cloud applications where new virtual machines are dynamically provisioned on demand.
+* Manage our complete virtual machine lifecycle.
+* Integrate our virtual machine provisioning workflow with the wider enterprise, for example automatically registering new virtual machines with a Red Hat Satellite server.
+* Implement intelligent virtual machine retirement workflows that de-allocate resources such as IP addresses, and unregister from directory services. 
+
+=== A Brief Word on Terminology
+
+This book refers to _Automate_ as the CloudForms/ManageIQ capability or product feature, and _automation_ as the thing that Automate allows us to do. The _Automation Engine_ allows us to create intelligent automation workflows, and run _automation scripts_, written in Ruby.
+
+=== Who Should Read This Book
+
+This book will appeal to cloud or virtualisation administrators who are interested in automating parts of their virtual infrastructure or cloud computing environment. Although primarily aimed at those with some familiarity with CloudForms or ManageIQ, many of the concepts and terms such as _orchestration_ and _automation workflows_ will be easily understood even to those unfamiliar with the product.
+
+Automate can be one of the more challenging aspects of the tools to master. The practitioner requires an unusual blend of skills; a familiarity with traditional "infrastructure" concepts such as virtual machines, hypervisors, and tenant networks, but also a flair for scripting in Ruby and mastery of a programming object model. There is no black magic however, and all of the skills can be learned if we are shown the way.
+
+The book assumes a reasonable level of competence with the Ruby language on the part of the reader. There are many good on-line Ruby tutorials available, including Codecademy's http://www.codecademy.com/tracks/ruby[Learn to program in Ruby].
+
+The book also presumes a comfortable level of working experience and familiarity of the Web User Interface (WebUI) features of either CloudForms or ManageIQ, particularly Insight, Control, tagging, and provisioning VMs via the **Lifecycle -> Provision VMs** entry point. Many of these features will be automated as we follow the examples in the book, and so an understanding of why tagging is useful (for example) is helpful.
+
+[NOTE]
+Both CloudForms and ManageIQ are web applications, so interaction is predominantly via the browser-based WebUI. We only use a command line terminal when we initially configure a CloudForms appliance, or when troubleshooting or examining logfiles.  
+
+=== Versions and Releases
+
+The descriptions and screenshots in this book are taken from the CloudForms 4.1 or ManageIQ _Darga_ releases.
+
+=== Navigating This Book (to be completed as the book progresses - pemcg)
+
+The book is divided into seven parts. 
+
+==== Part I "Working With Automate"
+
+Chapter 1, _Introduction to CloudForms and ManageIQ_, sets the scene and describes the capabilities of CloudForms and ManageIQ as cloud management platforms.
+
+Chapter 2, _Introduction to the Automate Datastore_, takes us on a tour of the objects that we work with when we use the Automate capabilities of CloudForms and ManageIQ.
+
+Chapter 3, _Writing and Running Our Own Automate Scripts_, introduces us to writing automation scripts in Ruby, with a simple "Hello, World!" example.
+
+Chapter 4, _Using Schema Variables_, shows how we can use our instance's schema to store and retrieve variables.
+
+Chapter 5, _Working with Virtual Machines_, demonstrates how to work with an Automation Engine virtual machine object, and how to run an automation script from a custom button in the Web User Interface.
+
+Chapter 6, _Peeping Under the Hood_, introduces some background theory about Rails _models_, and how CloudForms and ManageIQ abstract these as _Service Models_ that we work with when we write our automation scripts.
+
+Chapter 7, _$evm and the Workspace_, takes us on a tour of the useful +$evm+ methods that we frequently use when scripting, such as +$evm.vmdb+ and +$evm.object+.
+
+Chapter 8, _A Practical Example: Enforcing Anti-Affinity Rules_, is a real-world full-script example of how we could use the techniques learnt so far to implement anti-affinity rules in our virtual infrastructure, based on tags.
+
+Chapter 9, _Using Tags from Automate_, describes in detail how we can create, assign, read, and work with tags from our Ruby automation scripts.
+
+Chapter 10, _Investigative Debugging_, discusses the ways that we can discover which Automate objects are available to us when scripting. This is useful both from an investigative viewpoint when developing scripts, but also for debugging our scripts when things are not working as expected.
+
+Chapter 11, _Ways of Entering Automate_, shows us the various workflow entry points into the Automate Datastore. It also illustrates how we can determine programmatically the way that our automation script has been called, so enabling us to create re-usable scripts.
+
+Chapter 12, _Requests and Tasks_, illustrates how more advanced Automate operations are separated into a _Request_ stage, which requires administrative approval to progress into the _Task_ stage. The corresponding request and task objects are described, and their usage compared.
+
+Chapter 13, _State Machines_, introduces us to state machines, and how we can use them to intelligently sequence our workflows.
+
+Chapter 14, _More Advanced Schema and Instance Features_, discusses the more advanced but less frequently used schema and instance features; Messages, Assertions, Collections, and the .missing instance.
+
+Chapter 15, _Tenancy and Automate_, 
+
+Chapter 16, _Event Processing_, describes the way that CloudForms and ManageIQ respond to external events such as a virtual machine shutting down, and traces the event handling sequence through the Automate Datastore. It also shows how Automate manages its own internal events such as +request_started+.
+
+==== Part II "Provisioning Virtual Machines"
+
+Chapter 17, _Provisioning a Virtual Machine_, introduces concept of virtual machine provisioning, the most complex out-of-the-box Automate operation that is performed by CloudForms and ManageIQ.
+
+Chapter 18, _The Provisioning Profile_, describes how the provisioning profile is referenced to determine the initial group-specific processing that is performed at the start of a virtual machine provisioning operation.
+
+Chapter 19, _Approval_, shows how the approval workflow operates, and how we can adjust the auto-approval criteria such as the number of virtual machines to be provisioned, or the amount of storage, to suit our needs.
+
+Chapter 20, _Quota Management_, gives details of the CloudForms and ManageIQ quota handling mechanism, and how it enables us to establish quotas for tenants or groups.
+
+Chapter 21, _The Options Hash_, explains the importance of a data structure called the _options hash_, and how we can use it to retrieve and store variables to customise the virtual machine provisioning operation.
+
+Chapter 22, _The Provisioning State Machine_, discusses the stages in the state machine that governs the sequence of operations involved in provisioning a virtual machine.
+
+Chapter 23, _Customising Virtual Machine Provisioning_, is a practical example showing how we can customise the state machine and include our own Methods to add a second hard disk during the virtual machine provisioning operation.
+
+Chapter 24, _Virtual Machine Naming During Provisioning_, explains how we can customise the _naming_ logic that determines the name given to the newly provisioned virtual machine.
+
+Chapter 25, _Virtual Machine Placement During Provisioning_, explains how we can customise the _placement_ logic that determines the host, cluster and datastore locations for our newly provisioned virtual machine.
+
+Chapter 26, _The Provisioning Dialog_, describes the WebUI dialogs that prompt for the parameters that are required before a new virtual machine can be provisioned. The chapter also explains how the dialogs can be customised to expand optional ranges for items like size of memory, or to present a cut down bespoke dialog to certain user groups.
+
+Chapter 27, _Virtual Machine Provisioning Objects_, details the four main objects that we work with when we write Ruby scripts to interact with the virtual machine provisioning process.
+
+Chapter 28, _Creating Provisioning Requests Programmatically_, shows how we can initiate a virtual machine provisioning operation from an automation script, instead of the Web User Interface.
+
+==== Part III "Automation using Ansible Tower"
+
+Chapter 29, _Automation using Ansible_
+
+Chapter 30, _Running Ansible Tower Jobs from Automate_
+
+Chapter 31, _Integrating with Satellite 6 During Provisioning_, is a practical example showing how to automate the registration of a newly created virtual machine with Red Hat Satellte 6, both as a _host_ and _content host_.
+
+==== Part IV "Working with Services"
+
+Chapter 29, _Service Dialogs_, introduces the components that make up a _service dialog_, including elements that can be dynamically populated by Ruby methods.
+
+Chapter 30, _The Service Provisioning State Machine_, discusses the stages in the state machine that governs the sequence of operations involved in creating a service.
+
+Chapter 31, _Catalog{Item,Bundle}Initialization_, describes two specific instances of the service provisioning state machine, that have been designed to simplify the process of creating service catalog _items_ and _bundles_.
+
+Chapter 32, _Approval and Quota_, shows the approval workflow for services, and how the new consolidated quota handling mechanism also applies to services.
+
+Chapter 33, _Creating a Service Catalog Item_, is a practical example showing how to create a service catalog item to provision a virtual machine.
+
+Chapter 34, _Creating a Service Catalog Bundle_, is a practical example showing how to create a service catalog bundle of three virtual machines.
+
+Chapter 35, _Service Objects_, is an exposé of the various objects that work behind the scenes when a service catalog item is provisioned.
+
+Chapter 36, _Log Analysis During Service Provisioning_, is a step-by-step walk-through, tracing the lines written to _automation.log_ at various stages of a service provision operation. This can help our understanding of the several levels of concurrent state machine activity taking place. 
+
+Chapter 37, _Service Hierarchies_, illustrates how services can contain other services, and we can arrange our service groups into hierarchies for organisational and management convenience. 
+
+Chapter 38, _Service Reconfiguration_, describes how we can create reconfigurable services. These are capable of accepting configuration parameters at order time via the service dialog, and can later be reconfigured with new configuration parameters via the same service dialog.
+
+Chapter 39, _Service Tips and Tricks_, mentions some useful tips to remember when developing services.
+
+==== Part V "Retirement"
+
+Chapter 40, _Virtual Machine and Instance Retirement_, discusses the retirement process for virtual machines and instances.
+
+Chapter 41, _Service Retirement_, discusses the retirement process for services.
+
+==== Part VI "Integration"
+
+Chapter 42, _Calling Automate from the RESTful API_, shows how we can make external calls _into_ CloudForms or ManageIQ to run Automate Instances via the RESTful API. We can also return results to our caller in this way, enabling us to create our own pseudo-API endpoints within the two platforms.
+
+Chapter 43, _Automation Request Approval_, explains how to customise the default approval behaviour for automation requests, so that nonadministrators can submit RESTful API requests without needing administrative approval.
+
+Chapter 44, _Calling External Services_, shows the various ways that we can call _out_ from Automate to integrate with our wider enterprise. This includes making outbound REST and SOAP calls, connecting to MySQL databases, and interacting with OpenStack using the _fog_ gem.
+
+==== Part VII "Miscellaneous" 
+
+Chapter 45, _Distributed Automation Processing_, describes how Automate has been designed to be horizontally scalable. The chapter describes the mechanism by which automation requests are distributed between multiple appliances in a Region.
+
+Chapter 46, _Argument Passing and Handling_, explains how arguments are passed to, and handled internally by Automate methods for each of the different ways that we've called them up to this point in the book.
+
+Chapter 47, _Miscellaneous Tips_, closes the book with some useful tips for Automate Method development.
+
+=== Online Resources
+
+There are several online resources that any student of CloudForms or ManageIQ Automate should be aware of.
+
+==== Official Documentation
+
+The official documentation for CloudForms is here: https://access.redhat.com/documentation/en/red-hat-cloudforms/
+ 
+The official documentation for ManageIQ is here: http://manageiq.org/documentation/
+
+==== Code Repositories
+
+One of the best sources of reference material is the excellent _CloudForms_Essentials_ code collection maintained by Kevin Morey from Red Hat (https://github.com/ramrexx/CloudForms_Essentials). This contains a wealth of useful code samples, and many of the examples in this book have originated from this source. 
+
+There is also the very useful Red Hat Consulting (https://github.com/rhtconsulting) GitHub repository maintained by several Red Hat consultants.
+
+==== Fora
+
+The ManageIQ project hosts the _ManageIQ Talk_ forum at http://talk.manageiq.org
+
+==== Blogs
+
+There are several blogs that have good CloudForms and ManageIQ-related articles, including some useful _notes from the field_. These include:
+
+* CloudForms NOW (http://cloudformsblog.redhat.com/)
+
+* Christian's Blog (http://www.jung-christian.de)
+
+* Laurent Domb OSS Blog (http://blog.domb.net/)
+
+* ALL THINGS OPEN (http://allthingsopen.com/)
+
+* TigerIQ (http://www.tigeriq.co/)
+
+=== Conventions Used in This Book
+////
+Let me know if you need to edit this section.
+////
+The following typographical conventions are used in this book:
+
+_Italic_:: Indicates new terms, URLs, email addresses, filenames, and file extensions, path and object names within the Automate Datastore, Schema field values
+
+*Bold*:: Indicates WebUI components, event names, Schema field names
+
++Constant width+:: Used for program listings, as well as within paragraphs to refer to program elements such as variable or function names, databases, data types, environment variables, statements, and keywords.
+
+**`Constant width bold`**:: Shows commands or other text that should be typed literally by the user.
+
+_++Constant width italic++_:: Shows text that should be replaced with user-supplied values or by values determined by context.
+
+[NOTE]
+====
+This icon signifies a general note.
+====
+
+[TIP]
+====
+This icon signifies a tip or suggestion
+====
+
+[WARNING]
+====
+This icon indicates a warning or caution.
+====
+
+=== Using Code Examples
+
+Code examples used in the book are available for download at link:$$https://github.com/pemcg/oreilly-mastering-cloudforms-automation$$[].
+
+
+
+
+

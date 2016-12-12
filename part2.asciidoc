@@ -1,0 +1,8 @@
+[[part2]]
+[part]
+:numbered!:
+== Provisioning Virtual Machines
+
+Provisioning a virtual machine is probably the most complex operation that is performed by the out-of-the-box Automation Engine. 
+
+Part II introduces the steps and workflows involved in provisioning virtual machines, and how we can customise these for our own purposes. It uses all of the automation features that we’ve discussed so far in the book.

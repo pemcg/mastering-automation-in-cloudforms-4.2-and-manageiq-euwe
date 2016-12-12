@@ -1,0 +1,146 @@
+[[vm-instance-retirement]]
+== Virtual Machine and Instance Retirement
+
+CloudForms and ManageIQ are virtual machine and instance lifecycle management tools, and so far we have concentrated on the provisioning phase of that lifecycle. The products also have virtual machine retirement workflows that lets us manage the retirement and deletion of our virtual machines or instances, both from the provider and from the CloudForms/ManageIQ VMDB if required.
+
+The retirement process allows us to treat differently virtual machines that were provisioned by CloudForms or ManageIQ, and those that might have already existed on the provider infrastructure, or have been [rovisioned by the native infrastructure manager.
+
+[NOTE]
+We may wish to keep the VMDB record of a virtual machine long after its deletion from the provider, for recording and auditing purposes.
+
+In this chapter we'll examine the retirement process for virtual machines and instances.
+
+=== Initiating Retirement
+
+Virual machine or instance retirement is initiated from the *Lifecycle* menu on the VM details page (see <<i1>>).
+
+[[i1]]
+.Virtual machine or instance retirement menu
+image::images/ss1.png[Screenshot,400,align="center"]
+{zwsp} +
+
+Clicking on *Retire this VM* raises a *request_vm_retire* event that begins a chain of relationships through the datastore:
+
+* *request_vm_retire* ->
+** _/System/Event/MiqEvent/POLICY/request_vm_retire_ ->
+** _/{Cloud,Infrastructure}/VM/Lifecycle/Retirement_ ->
+** _/{Cloud,Infrastructure}/VM/Retirement/StateMachines/VMRetirement/{Default,Unregister}_
+ 
+The relationship from _Lifecycle/Retirement_ forwards the event processing into the preferred virtual machine retirement state machine: _Default_ for cloud instances, _Default_ or _Unregister_ for infrastructure virtual machines. We can select our preferred infrastructure state machine (_Default_ is the default) by copying the _/Infrastructure/VM/Lifecycle/Retirement_ instance to our own domain and editing accordingly.
+
+
+=== Retirement-Related Attributes and Methods
+
+A virtual machine object has a number of retirement-related methods:
+
+....
+$evm.root['vm'].retire_now
+$evm.root['vm'].start_retirement
+$evm.root['vm'].finish_retirement
+$evm.root['vm'].retiring?
+$evm.root['vm'].retired?
+$evm.root['vm'].error_retiring?
+$evm.root['vm'].retirement_state=
+$evm.root['vm'].retirement_warn=
+$evm.root['vm'].retires_on=
+....
+
+[NOTE]
+====
+CloudForms 4.2/ManageIQ _Euwe_ also added a new method `extend_retires_on` so that the retirement date can be extended.
+====
+
+It also has several attributes:
+
+....
+$evm.root['vm'].retired = nil
+$evm.root['vm'].retirement_last_warn = nil
+$evm.root['vm'].retirement_requester = nil
+$evm.root['vm'].retirement_state = nil
+$evm.root['vm'].retirement_warn = nil
+$evm.root['vm'].retires_on = nil
+....
+
+During the retirement process some of these are set to indicate progress:
+
+....
+$evm.root['vm'].retirement_requester = admin   (type: String)
+$evm.root['vm'].retirement_state = retiring   (type: String)
+....
+
+and completion:
+
+....
+$evm.root['vm'].retired = true   (type: TrueClass)
+$evm.root['vm'].retirement_requester = nil
+$evm.root['vm'].retirement_state = retired   (type: String)
+$evm.root['vm'].retires_on = 2015-12-10   (type: Date)
+....
+
+=== VM Retirement State Machine
+
+The VM retirement state machines(s) undo many of the operations performed by the VM provision state machine. They allow us to optionally deactivate a CI record from a CMDB; unregister from DHCP, Active Directory, and DNS; and release both MAC and IP addresses (see <<i2>>).
+
+[[i2]]
+.Fields of the VM retirement state machine
+image::images/ss2.png[Screenshot,700,align="center"]
+{zwsp} +
+
+==== StartRetirement
+
+The _StartRetirement_ instance calls the _start_retirement_ state machine method, which checks whether the VM is already in state 'retired' or 'retiring', and if so it aborts. If in neither of these states it calls the VM's `start_retirement` method, which sets the `retirement_state` attribute to 'retiring'.
+
+==== PreRetirement/CheckPreRetirement
+
+The state machine allows us to have provider-specific instances and methods for these stages. The out-of-the-box infrastructure _PreRetirement_ instance runs a vendor-independant _pre_retirement_ method that just powers off the VM. The out-of-the-box cloud _PreRetirement_ instance runs the appropriate vendor-specific _pre_retirement_ method, i.e. _amazon_pre_retirement_, _azure_pre_retirement_ or _openstack_pre_retirement_. 
+
+_CheckPreRetirement_ checks that the power off has completed. The cloud versions have corresponding vendor-specific _check_pre_retirement_ methods.
+
+==== RemoveFromProvider/CheckRemovedFromProvider
+
+The *RemoveFromProvider* state allows us some flexibility in handling the actual removal of the VM, and this is where the _Default_ and _Unregister_ state machines differ.
+
+===== Default
+
+The *RemoveFromProvider* state of the _Default_ state machine links to the _RemoveFromProvider_ instance, which calls the _remove_from_provider_ state machine method, passing the `removal_type` argument of `'remove_from_disk'`. This checks whether the VM was provisioned from ManageIQ (`vm.miq_provision` is not *nil* ), *or* if the VM is tagged with **lifecycle/retire_full**. If either of these is true it fully deletes the VM from the underlying provider, including the disk image. Having done so it sets a boolean state variable `vm_removed_from_provider` to `true`.
+
+If neither of these checks returns **true**, no action is performed.
+
+===== Unregister
+
+The *RemoveFromProvider* state of the _Unregister_ state machine links to the _UnregisterFromProvider_ instance, which calls the _remove_from_provider_ state machine method, passing the `removal_type` argument of `'unregister'`. This checks whether the VM was provisioned from ManageIQ (`vm.miq_provision` is not *nil* ), *or* if the VM is tagged with **lifecycle/retire_full**. If either of these is true it deletes the VM from the underlying provider, but retains the VM's disk image, allowing the VM to be re-created if required in the future. Having done so it sets a boolean state variable `vm_removed_from_provider` to `true`.
+
+If neither of these checks is true, no action is performed.
+
+==== FinishRetirement
+
+The _FinishRetirement_ instance calls the _finish_retirement_ state machine method that sets the following VM object attributes:
+
+....
+:retires_on       => Date.today
+:retired          => true
+:retirement_state => "retired"
+....
+
+It also raises a *vm_retired* event that can be caught by an Automate action or control policy.
+
+==== DeleteFromVMDB
+
+The _DeleteFromVMDB_ instance calls the _delete_from_vmdb_ state machine method that checks for the state variable `vm_removed_from_provider`, and if found (and true) it removes the virtual machine record from the VMDB. With CloudForms 4.0/ManageIQ _Capablanca_, this state was enabled by default, meaning that all VM entries were deleted. With 4.1/_Darga_ this entry is commented out, and so we see retired VMs in the WebUI as having an 'A' in their tile quadrant, indicating their archived status.
+
+=== Summary
+
+This chapter shows that retirement is a more complex process than simply deleting the virtual machine. We must potentially free up resources that were allocated when the VM was created, such as an IP address. We might need to delete a CI record from a CMDB, unregister from Active Directory, or even keep the VMDB object inside CloudForms or ManageIQ for auditing purposes. 
+
+[NOTE]
+====
+If the VM remains in the VMDB in an archived state, it will still be returned as a valid VM if we run a `$evm.vmdb(:vm).all` call. This can get even more confusing if we have subsequently re-provisioned a VM with the same name, as `$evm.vmdb(:vm).find_by_name(vm_name)` may return the 'wrong' object to us. Fortunately there is a `vm.archived` boolean attribute that we can check to determine whether a VM object is active or archived.
+====
+
+As we have seen, the retirement workflow allows us to fine-tune all of these options, and handle retirement in a manner that suits us.
+
+=== Further Reading
+
+https://access.redhat.com/documentation/en/red-hat-cloudforms/4.0/provisioning-virtual-machines-and-hosts/chapter-6-retirement[Provisioning Virtual Machines and Hosts Chapter 6 - Retirement]
+
+http://www.jung-christian.de/2015/06/delete-vm-from-foreman-during-retirement/[Deleting VMs from Foreman during Retirement]

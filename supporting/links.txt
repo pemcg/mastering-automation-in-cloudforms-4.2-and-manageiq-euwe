@@ -1,0 +1,83 @@
+link:../ansible_tower_services/chapter.asciidoc[Ansible Tower Services]
+
+link:../automation_using_ansible/chapter.asciidoc[Automation Using Ansible]
+
+link:../tower_related_automate_components/chapter.asciidoc[Tower Related Automate Components]
+
+link:../creating_provisioning_requests_programmatically/chapter.asciidoc[Creating Programming Requests Programmatically]
+
+link:../calling_automation_using_the_restful_api/chapter.asciidoc[Calling Automation Using the RESTful API]
+
+link:../automation_request_approval/chapter.asciidoc[Automation Request Approval]
+
+link:../introduction_to_the_automate_datastore/chapter.asciidoc[Introduction to the Automate Datastore]
+
+link:../../customising_vm_provisioning/chapter.asciidoc[Customising VM Provisioning]
+
+link:../the_service_provisioning_state_machine/chapter.asciidoc[The Service Provisioning State Machine]
+
+link:../service_objects/chapter.asciidoc[Service Objects]
+
+link:../creating_a_service_catalog_item/chapter.asciidoc[Creating a Service Catalog Item]
+
+link:../creating_a_service_catalog_bundle/chapter.asciidoc[Creating a Service Catalog Bundle]
+
+link:../catalogitembundleinitialization/chapter.asciidoc[Catalog{Item,Bundle}Initialization]
+
+link:../investigative_debugging/chapter.asciidoc[Investigative Debugging]
+
+link:../working_with_virtual_machines/chapter.asciidoc[Working with Virtual Machines]
+
+link:../running_an_ansible_tower_job_from_a_button/chapter.asciidoc[Running an Ansible Tower Job From a Button]
+
+link:../evm_and_the_workspace/chapter.asciidoc[$evm and the Workspace]
+
+link:../provisioning_a_virtual_machine/chapter.asciidoc[Provisioning a Virtual Machine]
+
+link:../ways_of_entering_automate/chapter.asciidoc[Ways of Entering Automate]
+
+link:../service_tips_and_tricks/chapter.asciidoc[Service Tips and Tricks]
+
+link:../vm_provision_state_machine/chapter.asciidoc[The VM Provision State Machine]
+
+link:../vm_naming_during_provisioning/chapter.asciidoc[VM Naming During Provisioning]
+
+link:../using_tags_from_automate/chapter.asciidoc[Using Tags from Automate]
+
+link:../writing_running_our_own_automation_scripts/chapter.asciidoc[Writing and Running Our Own Automation Scripts]
+
+link:../integrating_with_satellite_6_during_provisioning/chapter.asciidoc[Integrating with Satellite 6 During Provisioning]
+
+link:../provisioning_quota_management/chapter.asciidoc[Provisioning Quota Management]
+
+link:../calling_external_services/chapter.asciidoc[Calling External Services]
+
+link:../distributed_automation_processing/chapter.asciidoc[Distributed Automation Processing]
+
+link:../peeping_under_the_hood/chapter.asciidoc[Peeping Under the Hood]
+
+link:../service_models/chapter.asciidoc[Service Models]
+
+link:../service_dialogs/chapter.asciidoc[Service Dialogs]
+
+link:../state_machines/chapter.asciidoc[State Machines]
+
+link:../using_schema_variables/chapter.asciidoc[Using Schema Variables]
+
+link:../the_provisioning_profile/chapter.asciidoc[The Provisioning Profile]
+
+link:../provisioning_approval/chapter.asciidoc[Provisioning Approval]
+
+link:../the_provisioning_dialog/chapter.asciidoc[The Provisioning Dialog]
+
+link:../the_options_hash/chapter.asciidoc[The Options Hash]
+
+link:../requests_and_tasks/chapter.asciidoc[Requests and Tasks]
+
+link:../enforcing_anti_affinity_rules/chapter.asciidoc[Enforcing Anti-Affinity Rules]
+
+link:../vm_provisioning_objects/chapter.asciidoc[VM Provisioning Objects]
+
+link:../vm_instance_retirement/chapter.asciidoc[VM and Instance Retirement]
+
+link:scripts[here]

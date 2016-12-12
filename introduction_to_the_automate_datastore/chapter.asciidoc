@@ -1,0 +1,202 @@
+[[introduction-to-the-automate-datastore]]
+== Introduction to the Automate Datastore
+
+When we use the Automate capability of CloudForms/ManageIQ, we write scripts in the Ruby language, and use objects that the _Automation Engine_ makes available to us. The CloudForms/ManageIQ Web User Interface (WebUI) allows us to access the Automate functionality via the *Automate* top-level menu (see <<i1>>).
+
+[[i1]]
+.Automate top-tevel menu for CloudForms 4.1
+image::images/ss1.png[screenshot,270,align="center"]
+{zwsp} +
+
+=== The Automate Explorer
+
+The first menu item that we see takes us to the _Explorer_. This is our visual interface into the _Automate Datastore_, and it contains the various kinds of Automate objects that we'll use throughout this book (see <<i2>>).
+
+[[i2]]
+.Automate Explorer
+image::images/ss2.png[screenshot,450,align="center"]
+{zwsp} +
+
+Before we start our journey into learning CloudForms/ManageIQ Automate, we'll take a tour of the Automate Datastore to familiarise ourselves with the objects that we'll find there.
+
+=== The Automate Datastore
+
+The Automate Datastore has a directory-like structure, consisting of several types of organisational unit arranged in a hierarchy (see <<i3>>).
+
+[[i3]]
+.Automate datastore icon styles
+image::images/datastore.png[screenshot,300,align="center"]
+{zwsp} +
+
+We can look at each of these types of object in more detail.
+
+=== Domains
+
+A _domain_ is a collection of namespaces, classes, instances and methods. The ManageIQ project provides a single _ManageIQ_ domain for all supplied automation code, whilst Red Hat adds the supplemental _RedHat_ domain containing added-value code for the CloudForms product. The ManageIQ and RedHat domains are locked, indicating their read-only nature, however we can create new domains for our own custom automation code. <<i2>> shows the default domains, and an additional two custom domains: _Bit63_ and _ACME_. 
+
+Organising our own code into custom domains greatly simplifies the task of exporting and importing code (simplifying code portability and reuse). It also leaves Red Hat or the ManageIQ project free to update the locked domain through minor releases without fear of overwriting our customisations.
+
+[NOTE]
+If we are logged into CloudForms/ManageIQ as an account in a child tenant, we may see domains created by a parent tenant in the Automate Datastore, but they will also appear as locked.
+
+==== Domain Priority
+
+User-added domains can be individually enabled or disabled, and can be ordered by priority such that if code exists in the same path in multiple domains (for example _/Cloud/VM/Provisioning/StateMachines_), the code in the highest priority enabled domain will be executed. We can change the priority order of our user-added domains using the *Configuration -> Edit Priority Order of Domains* menu (see <<i4>>).
+
+[[i4]]
+.Editing the priority order of domains
+image::images/ss3.png[screenshot,450,align="center"]
+{zwsp} +
+
+==== Importing and Exporting Domains
+
+We can export domains using _rake_ from the command line, and import them either using rake or from the WebUI. (Using rake enables us to specify more import and export options). A typical rake import line is as follows:
+
+....
+bin/rake evm:automate:import YAML_FILE=bit63.yaml IMPORT_AS=Bit63 SYSTEM=false \
+ENABLED=true DOMAIN=Export PREVIEW=false
+....
+
+==== Copying Objects Between Domains
+
+We frequently need to customise code in one of the the locked domains, for example when implementing our own custom VM Placement method. Fortunately we can easily copy any object from a locked domain into our own, using *Configuration -> Copy this ...* (see <<i6>>).
+
+[[i6]]
+.Copying a class
+image::images/ss4.png[screenshot,450,align="center"]
+{zwsp} +
+
+When we copy an object such as a class, we are prompted for the *From* and *To* domains. We can optionally deselect *Copy to same path* and specify our own destination path for the object (see <<i7>>).
+
+[[i7]]
+.Specifying the destination domain and path
+image::images/ss5.png[screenshot,400,align="center"]
+{zwsp} +
+
+==== Importing Old Format Exports
+
+Domains were a new feature of the Automate Datastore in CloudForms 3.1/ManageIQ _Anand_. Prior to this release all factory-supplied and user-created automation code was contained in a common structure, which made updates difficult when any user-added code was introduced (the user-supplied modifications needed exporting and reimporting/merging whenever an automation update was released).
+
+To import a Datastore backup from a CloudForms 3.0 and prior format Datastore, we must convert it to the new Datastore format first, like so:
+
+....
+cd /var/www/miq/vmdb
+bin/rake evm:automate:convert FILE=database.xml DOMAIN=SAMPLE \
+ZIP_FILE=/tmp/sample_converted.zip
+....
+
+=== Namespaces
+
+A _namespace_ is a folder-like container for classes, instances and methods, and is used purely for organisational purposes. We create namespaces to arrange our code logically and namespaces often contain other namespaces (see <<i8>>).
+
+[[i8]]
+.Namespaces
+image::images/ss6.png[screenshot,240,align="center"]
+{zwsp} +
+
+=== Classes
+
+A _class_ is similar to a template, it contains a generic definition for a set of automation operations. Each class has a schema, that defines the variables, states, relationships or methods that instances of the class will use.
+
+[NOTE]
+The Automate Datastore uses object-oriented terminology for these objects. A _class_ is a generic definition for a set of automation operations, and these classes are _instantiated_ as specific instances.
+The classes that we work with in the Automate Datastore are not the same as Ruby classes that we work with in our automation scripts.
+
+==== Schemas
+
+A _schema_ is made up of a number of elements, or __fields__, that describe the properties of the class. A schema often has just one entry - to run a single method - but in many cases it has several components. <<i9>> shows the schema for a _placement_ class, which has several different field types.
+
+[[i9]]
+.A more complex schema
+image::images/ss7.png[screenshot,380,align="center"]
+{zwsp} +
+
+==== Adding or Editing a Schema 
+
+We add or edit each schema field in the schema editor by specifying the *Type* from a drop-down list (see <<i10>>).
+
+[[i10]]
+.Schema field type
+image::images/ss8.png[screenshot,500,align="center"]
+{zwsp} +
+
+Each field type has an associated *Data Type* which is also selectable from a drop-down list (see <<i11>>).
+
+[[i11]]
+.Schema field data type
+image::images/ss9.png[screenshot,500,align="center"]
+{zwsp} +
+
+We can define default values for fields in a class schema. These will be inherited by all instances created from the class, but can be optionally overridden in the schema of any particular instance.
+
+==== Relationships
+
+One of the schema field types is a __relationship__, which links to other instances elsewhere in the Automate Datastore. We often use relationships as a way of chaining instances together, and relationship values can accept variable substitutions for flexibility (see <<i12>>).
+
+[[i12]]
+.Relationship fields showing variable substitutions
+image::images/ss10.png[screenshot,450,align="center"]
+{zwsp} +
+
+=== Instances
+
+An _instance_ is a specific _instantiation_ or "clone" of the generic class, and is the entity run by the Automation Engine. An instance contains a copy of the class schema but with actual values of the fields filled in (see <<i13>>).
+
+[[i13]]
+.Single class definition with three instances
+image::images/ss11.png[screenshot,280,align="center"]
+{zwsp} +
+
+=== Methods
+
+A _method_ is a self-contained block of Ruby code that gets executed when we run any automation operation. A typical method looks like this:
+
+[source,ruby]
+....
+#
+# Description: This method checks to see if the VM has been powered off or 
+# suspended
+#
+
+# Get vm from root object
+vm = $evm.root['vm']
+
+if vm
+  power_state = vm.attributes['power_state']
+  ems = vm.ext_management_system
+  $evm.log('info', "VM:<#{vm.name}> on provider:<#{ems.try(:name)} has Power \
+            State:<#{power_state}>")
+
+  # If VM is powered off or suspended exit
+
+  if %w(off suspended).include?(power_state)
+    # Bump State
+    $evm.root['ae_result']         = 'ok'
+  elsif power_state == "never"
+    # If never then this VM is a template so exit the retirement state machine
+    $evm.root['ae_result']         = 'error'
+  else
+    $evm.root['ae_result']         = 'retry'
+    $evm.root['ae_retry_interval'] = '60.seconds'
+  end
+end
+....
+
+Methods can have one of three _Location_ values: *inline*, *builtin*, or *URI*. In practice most of the methods that we create are *inline* methods, which means they run as a separate Ruby process outside of Rails.
+
+=== Summary
+
+In this chapter we've learned about the fundamental objects or organisational units that we work with in the Automate Datastore: domains, namespaces, classes, instances and methods.
+
+We are now ready to use this information to write our first automation script.
+
+==== Further Reading
+
+http://CloudForms/ManageIQ.org/pdf/CloudForms/ManageIQ-0-Scripting_Actions_in_CloudForms/ManageIQ-en-US.pdf[Scripting Actions in CloudForms/ManageIQ] 
+
+https://access.redhat.com/solutions/1225313[CloudForms 3.1 Exporting Automate Domains]
+
+https://access.redhat.com/solutions/1225383[CloudForms 3.1 Importing Automate Domains]
+
+https://access.redhat.com/solutions/1225413[CloudForms 3.1 Automate Model Conversion]
+

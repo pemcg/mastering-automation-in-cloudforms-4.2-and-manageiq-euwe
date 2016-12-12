@@ -1,0 +1,729 @@
+[[event-processing]]
+== Event Processing
+
+One of the most powerful features of ManageIQ Automate is its capability to process __events__. ManageIQ can monitor and respond to external (provider) events, such as a virtual machine starting or stopping, or a hypervisor going into maintenance. These events can then be used as triggers for Automate operations. We might wish to initiate a SmartState Analysis scan on a new VMware virtual machine when a *VmCreatedEvent* event is detected for example. Perhaps we'd like to intercept and cancel a *USER_INITIATED_SHUTDOWN_VM* event being detected on a critical RHEV virtual machine that we've tagged as "do_not_shutdown". 
+
+ManageIQ Automate also raises its own events internally, which can then be used as workflow triggers. We see an example of this when we provision a new virtual machine (we cover VM provisioning in Part II of the book). The workflow for provisioning a virtual machine includes an approval stage - we can optionally allow administrators to approve large VM requests - followed by a quota-checking stage to ensure that users are not exceeding their quota. The successful approval of the VM provisioning request results in Automate raising a *request_approved* internal event. This *request_approved* event is then used as the trigger to automatically start the quota checking workflow (see link:../provisioning_quota_management/chapter.asciidoc[Provisioning Quota Management] for more details of this workflow).
+
+In this chapter we'll examine in detail how events are processed by the Automation Engine. This is a 'deep dive' chapter containing useful background information, but can be skipped for now if required. Event handling happens automatically in ManageIQ, and an understanding of the event processing workflow can help us as we advance our Automate skills. In link:../automation_request_approval/chapter.asciidoc[Automation Request Approval] we create an entirely new approval workflow, based largely on our knowledge of how events are processed.
+
+To improve the scalability of event handling, particularly with the advent of new providers and provider types, the event processing mechanism has been substantially re-written in ManageIQ _Capablanca_. We'll first look at the new component parts of Automate's event processing, and then we'll study how external events are caught and internal events are raised and handled. 
+
+=== Event Processing Component Parts
+
+The are several new components involved in processing events in ManageIQ _Capablanca_, including an event stream object type, the event switchboard, and event handlers.
+
+==== The Event Stream Object
+
+Events are now handled by an _event stream_ object, derived from a parent _EventStream_ class. An EventStream object is created in response to an external or internal event, and this object is sent to Automate to initiate the event handling process. 
+
+Events enter Automate at the _/System/Process/Event_ instance, and this contains a *rel5* relationship that redirects the handling of the event into the event switchboard. The root of the event switchboard is at _/System/Event_. (see <<i1>>).
+
+[[i1]]
+.Entry Relationship into the Event Switchboard
+image::images/ss1.png[Screenshot,900,align="center"]
+{zwsp} +
+
+==== The Event Switchboard
+
+The _event switchboard_ is a new set of namespaces, classes, instances and methods, written to handle the processing of events in a scalable manner. 
+
+_/System/Process/Event_ contains a *rel5* relationship into the switchboard, and this relationship URI comprises three parts; the event namespace, the event source, and the event type. Each is selected from the substitution of a run-time variable: 
+
+----
+/System/Event/${/#event_stream.event_namespace} / 
+${/#event_stream.source} / 
+${/#event_type}
+----
+
+The substituted values are taken from attributes of the EventStream object representing the event, and the event type.
+
+===== Event stream mamespace
+
+The `${/#event_stream.event_namespace}` part of the relationship translates to one of four _event stream namespaces_:
+
+* *CustomEvent* where we can define our own _management event_ alerts
+* *EmsEvent* if the event's origin was an _external management system_ (i.e. a provider). An EmsEvent instance contains all information about its virtual machine, host and provider related to the event
+* *MiqEvent* if the event's origin was an internal ManageIQ-initiated _Policy_ event
+* *RequestEvent* if the event is related to an automation request (e.g. **request_created**)
+
+These can be seen in <<i2>>
+
+[[i2]]
+.Event Stream Namespaces
+image::images/ss2.png[Screenshot,320,align="center"]
+{zwsp} +
+
+===== Event stream source
+
+Within each of the event stream namespaces, are classes that define the _event stream source_ instances. The selection of source class is made from the substitution of the _${/#event_stream.source}_ part of the _/System/Process/Event_ *rel5* relationship. We can see that for the _EmsEvent_ namespace, these represent the various _External Management Systems_ (Amazon, OpenStack, etc.) See <<i3>>.
+
+[[i3]]
+.Event Stream Sources
+image::images/ss3.png[Screenshot,350,align="center"]
+{zwsp} +
+
+[[event-type]]
+===== Event type
+
+Under the appropriate event stream source classes are instances that define the processing required for each _event type_. The selection of event type is made from the substitution of the _${/#event_type}_ part of the _/System/Process/Event_ *rel5* relationship. We can see that these represent the various events that the *EventCatcher::Runner* workers detect from the provider message bus. <<i4>> shows the event types in the _Amazon_ namespace.
+
+[[i4]]
+.Event Types for the Amazon Event Stream Source
+image::images/ss4.png[Screenshot,320,align="center"]
+{zwsp} +
+
+The event type instances contain one or more relationships to _event handlers_ in the _/System/event_handlers_ namespace that define what actions to take for that event. For example the _Amazon_ event _AWS_EC2_Instance_running_ will call the _event_action_policy_ handler to push a new *vm_start* policy event through the switchboard. It also calls the _event_action_refresh_ handler to trigger a provider refresh so that the current instance details can be retrieved (see <<i5>>).
+
+[[i5]]
+.The Actions Defined by the Event Type Instance
+image::images/ss5.png[Screenshot,700,align="center"]
+{zwsp} +
+
+==== Event Handlers
+
+Event handlers are instances and methods that perform the actual granular processing for each event. The methods are _builtin_ for execution efficiency; their code is not visible in the Automate Explorer (see <<i6>>).
+
+[[i6]]
+.Event Handler Instances
+image::images/ss6.png[Screenshot,300,align="center"]
+{zwsp} +
+
+=== Catching and Handling External Events
+
+One of the ManageIQ server roles that can be configured is _Event Monitor_. If we enable this role, we get two additional types of worker thread started on our appliance, to detect (_catch_) and process (_handle_) external provider events.
+
+==== Event Catching
+
+External (provider) events are monitored by _EventCatcher_ workers, and these monitor the real-time message or event buses on the various providers: AWS:config for Amazon, AMQP/RabbitMQ for OpenStack, the native VMware Message Bus, or the RHEV-M events exposed through the RESTful API for example.
+
+There is a specific EventCatcher worker for each provider configured on an appliance. The EventCatcher workers are named in accordance with the new ManageIQ _Capablanca_ provider namespace format, so entries in _evm.log_ appear as:
+
+....
+ManageIQ::Providers::Redhat::InfraManager::EventCatcher::Runner#process_event) \
+      EMS [rhevm01] as [admin@internal] Caught event [USER_INITIATED_SHUTDOWN_VM]
+ManageIQ::Providers::Redhat::InfraManager::EventCatcher::Runner#process_event) \
+      EMS [rhevm01] as [admin@internal] Caught event [VM_DOWN]
+...IQ::Providers::Openstack::CloudManager::EventCatcher::Runner#process_event) \
+      EMS [rhosp-cont] as [admin] Caught event [compute.instance.power_on.start]
+....
+
+==== Event Processing
+
+The EventCatcher workers queue the handling and processing of the specific event to one or more _EventHandler_ workers. The arguments passed to the EventHandler include the provider-specific details for the event source. 
+
+We can trace the steps in the event processing workflow on a RHEV *USER_RUN_VM* event being caught. 
+
+===== Step 1
+
+The first thing that we see in `evm.log` is the call to the EventHandler, along with arguments containing the RHEV API ids and hrefs describing the event source.
+
+....
+Args: [{:id=>"26790", \
+    :href=>"/api/events/26790", \
+    :cluster=>{
+        :id=>"00000001-0001-0001-0001-000000000249", \
+        :href=>"/api/clusters/00000001-0001-0001-0001-000000000249"}, \
+    :data_center=>{
+        :id=>"00000002-0002-0002-0002-000000000314",
+        :href=>"/api/datacenters/00000002-0002-0002-0002-000000000314"}, \
+    :host=>{
+        :id=>"b959325b-c667-4e3a-a52e-fd936c225a1a", \
+        :href=>"/api/hosts/b959325b-c667-4e3a-a52e-fd936c225a1a"}, \
+    :user=>{
+        :id=>"fdfc627c-d875-11e0-90f0-83df133b58cc", \
+         :href=>"/api/users/fdfc627c-d875-11e0-90f0-83df133b58cc"}, \
+    :vm=>{
+        :id=>"4e7b66b7-080d-4593-b670-3d6259e47a0f", \
+        :href=>"/api/vms/4e7b66b7-080d-4593-b670-3d6259e47a0f"}, \
+    :description=>"VM rhel7srv010 started on Host rhelh03.bit63.net", \
+    :severity=>"normal", \
+    :code=>32, \
+    :time=>2016-01-31 15:53:29 UTC, \
+    :name=>"USER_RUN_VM"}]
+....
+
+===== Step 2
+
+The EventHandler worker feeds the event into the event switchboard, by creating and passing an _EmsEvent_ EventStream object into Automate in the form of a queued request (we discuss queued requests more in link:../distributed_automation_processing/chapter.asciidoc[Distributed Automation Processing]). The EventHandlers translate the provider-specific arguments (API hrefs) into ManageIQ object IDs, and include these as arguments to the Automate request:
+
+....
+Args: [{:object_type=>"EmsEvent", \
+        :object_id=>1000000007999, \
+        :attrs=>{:event_id=>1000000007999, \
+                 :event_stream_id=>1000000007999, \
+                 :event_type=>"USER_RUN_VM", \
+                 "VmOrTemplate::vm"=>1000000000023, \
+                 :vm_id=>1000000000023, \
+                 "Host::host"=>1000000000002, \
+                 :host_id=>1000000000002}, \
+                 :instance_name=>"Event", \
+                 :user_id=>1000000000001, \
+                 :miq_group_id=>1000000000002, \
+                 :tenant_id=>1000000000001, \
+                 :automate_message=>nil}]
+....
+
+===== Step 3
+
+The request is dequeued and passed to the Automation Engine, which instantiates the _/System/Process/Event_ entry point to the event switchboard, along with the arguments passed by the EventHandler:
+
+....
+<AutomationEngine> Instantiating [/System/Process/Event?
+                   EventStream%3A%3Aevent_stream=1000000007999& \
+                   Host%3A%3Ahost=1000000000002& \
+                   MiqServer%3A%3Amiq_server=1000000000001& \
+                   User%3A%3Auser=1000000000001& \
+                   VmOrTemplate%3A%3Avm=1000000000023& \
+                   event_id=1000000007999& \
+                   event_stream_id=1000000007999& \
+                   event_type=USER_RUN_VM& \
+                   host_id=1000000000002& \
+                   object_name=Event& \
+                   vm_id=1000000000023& \
+                   vmdb_object_type=event_stream]
+....
+
+===== Step 4
+
+In the case of our RHEV *USER_RUN_VM* event, the event switchboard directs the processing to the _/System/Event/EmsEvent/RHEVM/USER_RUN_VM_ instance, which contains relationships to two automation event_handler instances (see <<i7>>).
+
+[[i7]]
+.Relationships to _event_handler_ instances
+image::images/ss7.png[Screenshot,500,align="center"]
+{zwsp} +
+
+[[step5]]
+===== Step 5
+
+The *rel4* relationship of the _/System/Event/EmsEvent/RHEVM/USER_RUN_VM_ instance calls _/System/event_handlers/event_action_policy_ to initiate the creation of an internal generic *vm_start* event.
+
+This completes the event processing workflow for the _external_ *USER_RUN_VM* event.
+
+=== Creating and Processing Internal Events
+
+In addition to catching external events, ManageIQ can raise its own events that can be processed by control policies or alerts. These are generated and handled by two internal (non-Automate) methods, _build_evm_event_ and _process_evm_event_.
+
+==== Event Processing
+
+We saw in <<step5>> that the *rel4* relationship of the _/System/Event/EmsEvent/RHEVM/USER_RUN_VM_ instance initiates the creation of a generic *vm_start* event. We find that most of the provider-specific events (such as *USER_RUN_VM* for RHEV or *AWS_EC2_Instance_running* for Amazon) are re-raised as their generic equivalent event (such as **vm_start**).
+
+We can continue following the processing of the *USER_RUN_VM* into the internal *vm_start* event by examining _evm.log_.
+
+===== Step 6
+
+We see the _/System/event_handlers/event_action_policy_ event handler being invoked as requested in <<step5>>:
+
+....
+Invoking [builtin] method [/ManageIQ/System/event_handlers/event_action_policy] \
+      with inputs [{"target"=>"src_vm", "policy_event"=>"vm_start", "param"=>""}]
+....
+
+This event handler calls the internal _build_evm_event_ method to assemble the parameters for the creation of the new *vm_start* event:
+
+....
+
+<AutomationEngine> MiqAeEvent.build_evm_event >> event=<"vm_start">
+    inputs=<{:"manageiq::providers::redhat::inframanager::vm"=>
+                #<ManageIQ::Providers::Redhat::InfraManager::Vm
+                id: 1000000000023,
+                ...>,
+            :ext_management_systems=>
+                #<ManageIQ::Providers::Redhat::InfraManager
+                id: 1000000000001,
+                ...>,
+            :ems_event=>
+                #<EmsEvent
+                id: 1000000007999,
+                event_type: "USER_RUN_VM",
+                message: "VM rhel7srv010 started on Host rhelh03.bit63.net",
+                ...>,
+            "MiqEvent::miq_event"=>1000000008000,
+            :miq_event_id=>1000000008000,
+            "EventStream::event_stream"=>1000000008000,
+            :event_stream_id=>1000000008000}>
+....
+
+===== Step 7
+
+The new event is queued for processing by the Automation Engine (much of the work of the Automate Engine involves queueing and dequeuing further Automate work tasks):
+
+....
+
+MIQ(MiqAeEngine.deliver) Delivering {:event_type=>"vm_start",
+              :"manageiq::providers::redhat::inframanager::vm"=>
+              #<ManageIQ::Providers::Redhat::InfraManager::Vm 
+             ...
+              :event_stream_id=>1000000008000} for object \
+                 [ManageIQ::Providers::Redhat::InfraManager::Vm.1000000000023] \
+                 with state [] to Automate
+....
+
+===== Step 8
+
+The Automation Engine dequeues the task, and instantiates the _/System/Process/Event_ entry point into the event switchboard, along with the arguments assembled and passed by the _build_evm_event_ internal method:
+
+....
+
+<AutomationEngine> Instantiating [/System/Process/Event?
+  EventStream%3A%3Aevent_stream=1000000008000& \
+  MiqEvent%3A%3Amiq_event=1000000008000& \
+  MiqServer%3A%3Amiq_server=1000000000001& \
+  User%3A%3Auser=1000000000001& \
+  VmOrTemplate%3A%3Avm=1000000000023& \
+  ems_event=1000000007999& \
+  event_stream_id=1000000008000& \
+  event_type=vm_start& \
+  ext_management_systems=1000000000001&
+  manageiq%3A%3Aproviders%3A%3Aredhat%3A%3Ainframanager%3A%3Avm=1000000000023& \
+  miq_event_id=1000000008000& \
+  object_name=Event& \
+  vmdb_object_type=vm] \
+....
+
+===== Step 9
+
+The event switchboard directs the processing to the _/System/Event/MiqEvent/POLICY/vm_start_ instance, which does not exist by default (we could create one if we wish). The _/System/Event/MiqEvent/POLICY/.missing_ instance is run in its place:
+
+....
+Following Relationship [miqaedb:/System/Event/MiqEvent/POLICY/vm_start#create]
+
+Instance [/ManageIQ/System/Event/MiqEvent/POLICY/vm_start] \
+                                not found in MiqAeDatastore - trying [.missing]
+....
+
+The _.missing_ instance contains a *rel2* relationship to _/System/event_handlers/event_enforce_policy_, so we follow the relationship chain:
+
+....
+Invoking [builtin] method [/ManageIQ/System/event_handlers/ \
+                                        event_enforce_policy] with inputs [{}]
+....
+
+[[step10]]
+===== Step 10
+
+The _event_enforce_policy_ event handler initiates the processing of any control policies and alerts that may be associated with the event being handled. 
+
+This completes the event processing workflow for the _internal_ *vm_start* event.
+
+==== Event-Initiated Control Policy Processing
+
+The next part of the event processing workflow handles any control policies that we might have associated with the event. This is where, for example, we would initiate a SmartState Analysis scan on a *VM Create Complete* policy event.
+
+We can continue tracing the event processing from the previous sections, which started with a RHEV *USER_RUN_VM* event being caught. We saw <<step10>> calling _/System/event_handlers/event_enforce_policy_.
+
+This method calls the internal `process_evm_event` method with a *target* argument corresponding to the VM object that raised the event:
+
+....
+MIQ(MiqEvent#process_evm_event) \
+    target = [#<ManageIQ::Providers::Redhat::InfraManager::Vm \
+                                                      id: 1000000000023, ...>]
+....
+
+===== Step 11
+
+The _process_evm_event_ internal method raises the *vm_start* (**VM Power On**) _policy_ event , and processes any actions (i.e. control policies) associated with the triggering of this policy event:
+
+....
+MIQ(MiqEvent#process_evm_event) Event Raised [vm_start]
+....
+
+In our case we have a VM control policy that runs an *Invoke a Custom Automation* action when the *VM Power On* event is triggered. The Custom Automation instance runs _/Stuff/Methods/ObjectWalker_ (via _/System/Request/Call_Instance_) (see <<i8>>).
+
+[[i8]]
+.VM Control Policy that Links a *VM Power On* Event to *Run ObjectWalker*
+image::images/ss9.png[Screenshot,400,align="center"]
+{zwsp} +
+
+===== Step 12
+
+The automation request to run _Call_Instance_ is queued for processing by the Automation Engine. This is subsequently dequeued and delivered to Automate:
+
+....
+MIQ(MiqAeEngine.deliver) Delivering \
+                        {"namespace"=>"stuff", \
+                        "class"=>"methods", \
+                        "instance"=>"objectwalker", \
+                        :request=>"call_instance", \
+                        "MiqPolicy::miq_policy"=>1000000000001} \
+        for object [VmOrTemplate.1000000000023] with state [] to Automate
+....
+
+We see object_walker running in the _automation.log_.
+
+==== Event-Initiated Alert Processing
+
+The final part of the event processing workflow handles any alerts that we might have associated with the event.
+
+===== Step 13
+
+The _process_evm_event_ internal method now raises the *vm_start* (**VM Operation: VM Power On**) alert, and processes any actions associated with the triggering of this alert:
+
+....
+MIQ(MiqEvent#process_evm_event) Alert for Event [vm_start]
+....
+
+In our case we have an alert that sends a *Management Event* called _test_ when the *VM Operation: VM Power On* alert is triggered (see <<i9>>).
+
+[[i9]]
+.An Alert to Send a test Management Event
+image::images/ss10.png[Screenshot,400,align="center"]
+{zwsp} +
+
+===== Step 14
+
+The alert is queued for processing by the internal _evaluate_alerts_ method, and our _test_ event is run:
+....
+MIQ(MiqAlert.evaluate_alerts) [vm_start] Target: \
+    ManageIQ::Providers::Redhat::InfraManager::Vm Name: [rhel7srv010], \
+    Id: [1000000000023] Queuing evaluation of Alert: [VM Powered On]
+....
+
+This completes the full event processing workflow that started when the *USER_RUN_VM* event was detected from the RHEV provider. We saw the workflow pass through four stages; the handling of the external event; the raising and processing of the corresponding internal event, and the subsequent control policy and alert processing that may have been been associated with the event type.
+
+=== Event-Initiated Automation Request Workflows
+
+Automation Engine workflows that involve separated requests and tasks (see <<requests-and-tasks>>) also use raised events to control the processing sequence.
+
+We can take a detailed look at the Automation Engine's workflow by examining the steps involved in handling a RESTful API call to run the Automate instance _/Stuff/Methods/Test_. 
+
+We know that this type of API call will be handled in _request_ and _task_ stages, where the "task" is the actual running of our automation script. We also know that requests must go though an approval workflow. We can follow the sequence of steps through the processing of the various events using _automation.log_, and the helpful "Following .. Followed" messages that the Engine prints.
+
+==== Step 1 - The request_created Event
+
+The first messages that we see after the API call has been made notify us of the *request_created* event happening. We're looking at ManageIQ _Capablanca_, so we see the new event stream information added to the event:
+
+....
+MIQ(AutomationRequest#call_automate_event) \
+                Raising event [request_created] to Automate
+MiqAeEvent.build_evm_event >> event=<"request_created"> \
+                inputs=<{"EventStream::event_stream"=>1000000009327, \
+                :event_stream_id=>1000000009327}>
+MIQ(AutomationRequest#call_automate_event) \
+                Raised  event [request_created] to Automate
+Instantiating [/System/Process/Event? \
+                AutomationRequest%3A%3Aautomation_request=1000000000029& \
+                EventStream%3A%3Aevent_stream=1000000009340& \
+                MiqRequest%3A%3Amiq_request=1000000000029& \
+                MiqServer%3A%3Amiq_server=1000000000001& \
+                User%3A3Auser=1000000000001& \
+                event_stream_id=1000000009340& \
+                event_type=request_created& \
+                object_name=Event& \
+                vmdb_object_type=automation_request]
+....
+
+Here we see the event being triggered, which takes us into the standard _/System/Process/Event_ entry point instance. As we've seen, _/System/Process/Event_ directs us into the event switchboard.
+
+----
+/System/Event/${/#event_stream.event_namespace}/ \
+                                        ${/#event_stream.source}/${/#event_type}
+----
+
+===== Step 1.1
+
+The variable substitutions are made from the EventStream object's attributes, and we follow the relationship chain through the switchboard:
+
+....
+Following Relationship [miqaedb:/System/Event/RequestEvent/Request/\
+                                                        request_created#create]
+....
+
+===== Step 1.2
+
+The _/System/Event/RequestEvent/Request/request_created_ instance contains a single *rel5* relationship to _/System/Policy/request_created_. Once again we follow the relationship chain:
+
+....
+Following Relationship [miqaedb:/System/Policy/request_created#create]
+....
+
+===== Step 1.3
+
+We are now in the _/System/Policy_ namespace, which is where the event-specific policies are defined, i.e. _what to do when this type of event happens_. instances in this namespace typically have several entries (see <<i10>>).
+
+[[i10]]
+.The schema of the /System/Policy/request_created instance
+image::images/ss12.png[Screenshot,380,align="center"]
+{zwsp} +
+
+A *request_created* event is raised for all types of request, so before any event-specific policy can be implemented, the _type_ of request must be determined.
+
+===== Step 1.4
+
+The _/System/Policy/request_created_ instance first runs the _get_request_type_ method to find out what type of request has been created:
+
+....
+Invoking [inline] method [/ManageIQ/System/Policy/get_request_type] \
+                                                                with inputs [{}]
+<AEMethod [/ManageIQ/System/Policy/get_request_type]> Starting
+<AEMethod get_request_type> Request Type:<AutomationRequest>
+<AEMethod [/ManageIQ/System/Policy/get_request_type]> Ending
+....
+
+The _get_request_type_ method returns "Request Type:<AutomationRequest>". 
+
+===== Step 1.5
+
+The next entry in the _/System/Policy/request_created_ schema is the *rel4* relationship to _/System/Process/parse_provider_category_, so we continue to follow the relationship chain:
+
+....
+Following Relationship [miqaedb:/System/Process/parse_provider_category#create]
+....
+
+Some event processing may be provider-specific, for example we may wish to handle the same event in a different way, depending on whether it came from VMware or OpenStack. The *rel4* relationship from _/System/Policy/request_created_ takes us to the _parse_provider_category_ instance to determine the provider. 
+
+The _parse_provider_category_ instance runs the _parse_provider_category_ method:
+
+....
+Invoking [inline] method [/ManageIQ/System/Process/parse_provider_category] \
+                                                                with inputs [{}]
+<AEMethod [/ManageIQ/System/Process/parse_provider_category]> Starting
+<AEMethod parse_provider_category> Parse Provider Category Key: nil  \
+                                                                Value: unknown
+<AEMethod [/ManageIQ/System/Process/parse_provider_category]> Ending
+....
+
+The _parse_provider_category_ method returns a *Value* of "unknown" as this automation request does not involve any _provider_ operations (as it would if we were provisioning a VM, for example).
+
+===== Step 1.6
+
+The final entry in the _/System/Policy/request_created_ schema is the *rel5* relationship to _/System/Policy/AutomationRequest_created_ ("AutomationRequest" having been substituted for _${#request_type})_. 
+
+This doesn't exist, so we see the warning message:
+
+....
+Instance [/ManageIQ/System/Policy/AutomationRequest_created] not found in \
+                                            MiqAeDatastore - trying [.missing]
+....
+
+We can create a _/System/Policy/AutomationRequest_created_ instance if we choose, but in this case the _.missing_ instance does nothing, so we end that event-initiated chain.
+
+==== Step 2 - The request_approved Event
+
+The next event that we see is *request_approved*, which follows a very similar chain of relationships (we find that *request_approved* executes almost concurrently with *request_created* because we specified `:auto_approve` to be `true` in the automation request API call). Here we see the extract from _evm.log_:
+
+....
+MIQ(AutomationRequest#call_automate_event) \
+    Raising event [request_approved] to Automate
+MiqAeEvent.build_evm_event >> event=<"request_approved"> \
+    inputs=<{"EventStream::event_stream"=>1000000009436, 
+    :event_stream_id=>1000000009436}>
+MIQ(AutomationRequest#call_automate_event) \
+    Raised  event [request_approved] to Automate
+Instantiating [/System/Process/Event? \
+    AutomationRequest%3A%3Aautomation_request=1000000000031& \
+    EventStream%3A%3Aevent_stream=1000000009436& \
+    MiqRequest%3A%3Amiq_request=1000000000031& \
+    MiqServer%3A%3Amiq_server=1000000000001& \
+    User%3A%3Auser=1000000000001& \
+    event_stream_id=1000000009436& \
+    event_type=request_approved& \
+    object_name=Event& \
+    vmdb_object_type=automation_request]
+....
+
+===== Step 2.1
+
+....
+Following Relationship [miqaedb:/System/Event/RequestEvent/Request/ \
+                                                         request_approved#create]
+....
+
+===== Step 2.2
+
+....
+Following Relationship [miqaedb:/System/Policy/request_approved#create]
+....
+
+===== Step 2.3
+....
+Following Relationship [miqaedb:/System/Process/ \
+                                                  parse_provider_category#create]
+Invoking [inline] method [/ManageIQ/System/Process/ \
+                                        parse_provider_category] with inputs [{}]
+<AEMethod [/ManageIQ/System/Process/parse_provider_category]> Starting
+<AEMethod parse_provider_category> Parse Provider Category Key: nil  \
+                                                                   Value: unknown
+<AEMethod [/ManageIQ/System/Process/parse_provider_category]> Ending
+
+....
+===== Step 2.4
+
+....
+Following Relationship [miqaedb:/System/Policy/ \
+                                               AutomationRequest_Approved#create]
+Instance [/ManageIQ/System/Policy/AutomationRequest_Approved] not found \
+                                            in MiqAeDatastore - trying [.missing]
+....
+
+The *request_approved* event processing doesn't call _get_request_type_ as there is no need for type-specific processing at this stage.
+
+Once again we have no _AutomationRequest_Approved_ method, so we terminate this event-initiated chain at this point.
+
+==== Step 3 - The request_starting Event
+
+The third event that we see is *request_starting*. At this stage we're running within the context of an automation request; each of these log lines is preceded by the text "Q-task_id([automation_request_1000000000031])".
+
+....
+MIQ(AutomationRequest#call_automate_event_sync) \
+    Raising event [request_starting] to Automate synchronously
+MiqAeEvent.build_evm_event >> event=<"request_starting"> \
+    inputs=<{"EventStream::event_stream"=>1000000009437, 
+    :event_stream_id=>1000000009437}>
+
+Instantiating [/System/Process/Event? \
+    AutomationRequest%3A%3Aautomation_request=1000000000031& \
+    EventStream%3A%3Aevent_stream=1000000009437& \
+    MiqRequest%3A%3Amiq_request=1000000000031& \
+    MiqServer%3A%3Amiq_server=1000000000001& \
+    User%3A%3Auser=1000000000001& \
+    event_stream_id=1000000009437& \
+    event_type=request_starting& \
+    object_name=Event& \
+    vmdb_object_type=automation_request]
+....
+
+===== Step 3.1
+....
+Following Relationship [miqaedb:/System/Event/RequestEvent/Request/ \
+                                                         request_starting#create]
+....
+===== Step 3.2
+....
+Following Relationship [miqaedb:/System/Policy/request_starting#create]
+Invoking [inline] method [/ManageIQ/System/Policy/get_request_type] \
+                                                                 with inputs [{}]
+<AEMethod [/ManageIQ/System/Policy/get_request_type]> Starting
+<AEMethod get_request_type> Request Type:<AutomationRequest>
+<AEMethod [/ManageIQ/System/Policy/get_request_type]> Ending
+....
+===== Step 3.3
+....
+Following Relationship [miqaedb:/System/Process/ \
+                                                  parse_provider_category#create]
+Invoking [inline] method [/ManageIQ/System/Process/ \
+                                        parse_provider_category] with inputs [{}]
+<AEMethod [/ManageIQ/System/Process/parse_provider_category]> Starting
+<AEMethod parse_provider_category> Parse Provider Category Key: nil  \
+                                                                   Value: unknown
+<AEMethod [/ManageIQ/System/Process/parse_provider_category]> Ending
+....
+===== Step 3.4
+....
+Following Relationship [miqaedb:/System/Policy/ \
+                                               AutomationRequest_starting#create]
+Instance [/ManageIQ/System/Policy/AutomationRequest_starting] \
+                                  not found in MiqAeDatastore - trying [.missing]
+....
+===== Step 3.5
+....
+MIQ(AutomationRequest#call_automate_event_sync) \
+                                      Raised event [request_starting] to Automate
+....
+
+At the end of this chain we see the automation request queuing the automation task:
+
+....
+Q-task_id([automation_request_1000000000031]) \
+    MIQ(AutomationTask#deliver_to_automate) \
+        Queuing Automation Request: [Automation Task]...
+Q-task_id([automation_request_1000000000031]) \ 
+    MIQ(AutomationTask#execute_queue) \
+        Queuing Automation Request: [Automation Task]...
+....
+
+==== Step 4 - Automation Task Processing
+
+Finally we see the actual automation task running, which invokes our _/Stuff/Methods/Test_ instance. At this stage each of these log lines is preceded by the text "Q-task_id([automation_task_1000000000034])" to indicate that we're running within the context of an automation task.
+
+....
+MIQ(AutomationTask#execute) Executing Automation Request request: \
+                                                                [Automation Task]
+MIQ(AutomationTask#execute) Automation Request initiated
+Instantiating [/Stuff/Methods/Test? \
+    AutomationTask%3A%3Aautomation_task=1000000000034& \
+    MiqServer%3A%3Amiq_server=1000000000001& \
+    User%3A%3Auser=1000000000001& \
+    object_name=test& \
+    userid=admin& \
+    vmdb_object_type=automation_task]
+Invoking [inline] method [/Stuff/Methods/Test] with inputs [{}]
+<AEMethod [/Stuff/Methods/Test]> Starting
+<AEMethod test> This is a test!
+<AEMethod [/Stuff/Methods/Test]> Ending
+Method exited with rc=MIQ_OK
+....
+
+=== Extending Automate Event Handling
+
+The provider-specific event stream source classes and associated instances under _/System/Event/EmsEvent_ do not necessarily handle every possible event that can be raised by the provider. Sometimes we need to extend event handling to process a non-default event.
+
+We can extend the out-of-the-box event handling by creating our own instances under _/System/Event/EmsEvent/{Provider}_  to handle these non-default events caught by the EventCatcher workers.
+
+As an example the *compute.instance.power_on.end* OpenStack event was not handled by default with CloudForms 4.0/ManageIQ _Capablanca_ (this has been added to CloudForms 4.1/ManageIQ _Darga_). If we looked in _evm.log_ we would see:
+
+....
+Instance [/ManageIQ/System/Event/EmsEvent/OPENSTACK/ \
+   compute.instance.power_on.end] not found in MiqAeDatastore - trying [.missing]
+....
+
+As a result, the Cloud instance's tile quadrant in the WebUI that shows power status didn't change to reflect the instance being powered on. This was easily fixed however.
+
+==== Adding a New Automation Instance to /System/Event/EmsEvent/
+
+There was already a _ManageIQ/System/Event/EmsEvent/OpenStack/compute.instance.power_off.end_ instance to handle the *compute.instance.power_off.end* event. This instance calls two event_handlers (see <<i11>>).
+
+[[i11]]
+.Event handlers called by the compute.instance.power_off.end instance
+image::images/ss13.png[Screenshot,600,align="center"]
+{zwsp} +
+
+We can copy this instance to our domain and rename it as _/System/Event/EmsEvent/OpenStack/compute.instance.power_on.end_ (see <<i12>>).
+
+[[i12]]
+.Creating a compute.instance.power_on.end instance
+image::images/ss14.png[Screenshot,350,align="center"]
+{zwsp} +
+
+We change the second event_handler line to trigger a *vm_start* policy event (see <<i13>>).
+
+[[i13]]
+.Editing the event handlers as required
+image::images/ss15.png[Screenshot,600,align="center"]
+{zwsp} +
+
+Now when we power on an OpenStack instance, we see the instance's tile quadrant change correctly, and we observe the raising and processing of the *vm_start* event:
+
+....
+Instantiating [/System/Process/Event? \
+    EventStream%3A%3Aevent_stream= \
+                           1000000009501&MiqEvent%3A%3Amiq_event=1000000009501& \
+    MiqServer%3A%3Amiq_server=1000000000001& \
+    User%3A%3Auser=1000000000001& \
+    VmOrTemplate%3A%3Avm=1000000000035& \
+    ems_event=1000000009500& \
+    event_stream_id=1000000009501& \
+    event_type=vm_start& \
+    ext_management_systems= 1000000000002& \
+    manageiq%3A%3Aproviders%3A%3Aopenstack%3A%3Acloudmanager%3A%3Avm= \
+                                                                 1000000000035& \
+    miq_event_id=1000000009501& \
+    object_name=Event& \
+    vmdb_object_type=vm]
+....
+
+This ensured that any control policies that are triggered by a *VM Power On* event ran correctly.
+
+=== Summary
+
+Phew! This has been a long theoretical chapter that has taken us on a detailed tour of how the Automation Engine handles events.
+
+We have familiarised ourselves with the component parts of the new event handling mechanism in CloudForms 4.0/ManageIQ _Capablanca_. We have seen how external provider events are detected ("caught"), and handled, and we have followed the event processing workflow from the detection of an RHEV provider event through the raising of the corresponding internal event and seen how related control policies and alerts are processed. 
+
+We have seen that Automate actions involving separated requests and tasks also use event-initiated workflows, and we have seen how to extend event handling to handle additional events.
+
+=== Next Steps
+
+This concludes Part I of the book. We now have enough knowledge of the Automate Datastore and the structures, concepts and objects it comprises to be able to tackle most automation challenges.
+
+In Part II we will put this knowledge to good use and start investigating the Automate operations involved in provisioning a virtual machine. 

@@ -1,0 +1,509 @@
+[[service-reconfiguration]]
+== Service Reconfiguration
+
+Our virtual machine or instance provisioning workflows have so far created new ready-configured virtual machines, or virtual machines integrated with Satellite 6 so that a Puppet configuration can be applied. (see <<integrating-with-satellite-6-during-provisioning>>). 
+
+In these cases we must login to two separate systems to get our provisioned and configured servers into operation. We login to the ManageIQ WebUI to start the provisioning operation, and a second WebUI for the configuration management platform such as Satellite to set or reset the configuration parameters.
+
+When we provision new virtual machines as services however we can consolidate the provisioning and configuration functions in a single user interface. We can set initial configuration parameters in a service dialog, and then mark a service as _Reconfigurable_ to allow these parameters to be updated from the same ManageIQ service dialog.
+
+This duel use of a service dialog for both initial configuration and reconfiguration works well if we are using a configuration management tool such as Satellite 6, and Puppet. We can specify Puppet _Smart Class Parameters_ in our service dialog that can be passed to Foreman and used to override the statically defined Puppet class parameters.
+
+=== Reconfigure Entry Point
+
+So far when we have created our service catalog items, we have specified a provisioning entry point state machine to handle the provisioning workflow for the new service. There are two other entry points that we can optionally hook into, a retirement entry point (see <<service-retirement>>), and a reconfigure entry point (see <<c38i1>>).
+
+[[c38i1]]
+.Setting the reconfigure entry point when creating a service item
+image::images/ss1.png[Screenshot,700,align="center"]
+{zwsp} +
+
+If we create a service catalog item to have a reconfigure entry point state machine, then any service created from that catalog item will have a *Reconfigure this Service* option available under its *Configuration* menu (see <<c38i2>>).
+
+[[c38i2]]
+.Reconfiguring a service
+image::images/ss2.png[Screenshot,500,align="center"]
+{zwsp} +
+
+If we select this option, we are presented with the original service dialog once more. Entering new values and clicking the *Submit* button will create a _ServiceReconfigureRequest_ to peform the reconfiguration action, based on the revised values that we have have entered into the dialog.
+
+=== Service Design
+
+When we create a service that can be reconfigured in this way, we need to put extra thought into our service design and provisioning workflow. We need to make some of our service dialog elements _Reconfigurable_ so that we can enter new values when re-presented with the dialog on a service reconfiguration request (elements not marked as Reconfigurable will be greyed out). We need to create a _set_configuration_ method that can be called from either the virtual machine provision or service reconfiguration state machines, and retrieve dialog values from the correct location in each case. This method must detect whether the VM provision was initiated from a service that passed the correct dialog values, or an interactive VM provision request that did not.
+
+=== Adding a Configuration Management Provider
+
+We can add our Satellite 6 server to CloudForms or ManageIQ as a _configuration management_ provider. This imports the Foreman host groups as ManageIQ _configuration profiles_, saving us from having to make a REST call to the Satellite server to list them (see <<c38i3>>).
+
+[[c38i3]]
+.Configuration profiles imported from Satellite 6
+image::images/ss3.png[Screenshot,700,align="center"]
+{zwsp} +
+
+=== Automate Datastore Components
+
+Even though a service reconfiguration capability is provided for us by ManageIQ, we still need to add several Automate Datastore components if we wish to use it.
+
+==== Creating the Namespaces and State Machines
+
+In our own domain, we'll create a _/Service/Reconfiguration/StateMachines_ namespace (see <<c38i4>>).
+
+[[c38i4]]
+./Service/Reconfiguration/StateMachines namespace
+image::images/ss4.png[Screenshot,350,align="center"]
+{zwsp} +
+
+We'll create a simple state machine class called _ServiceReconfigure_, with 7 states (see <<c38i5>>).
+
+[[c38i5]]
+.ServiceReconfigure state machine class schema
+image::images/ss5.png[Screenshot,600,align="center"]
+{zwsp} +
+
+*pre\{1-3}* and *post\{1-3}* are future-proofing placeholders in case we wish to enhance the functionality in future. For now we'll just be using the *reconfigure* state.
+
+We'll copy the _ManageIQ/Service/Provisioning/StateMachines/ServiceProvision_Template/update_serviceprovision_status_ method into our domain, and rename it to _update_servicereconfigure_status_. We change line 6 from:
+
+[source,ruby]
+....
+prov = $evm.root['service_template_provision_task']
+....
+to:
+
+[source,ruby]
+....
+reconfigure_task = $evm.root['service_reconfigure_task']
+....
+
+We also change the variable name in line 13 from +prov+ to +reconfigure_task+.
+
+We'll edit the **On Entry**, *On Exit* and *On Error* columns in the state machine class schema to refer to the new _update_servicereconfigure_status_ method (see <<c38i6>>).
+
+[[c38i6]]
+.Setting the On Entry methods
+image::images/ss6.png[Screenshot,450,align="center"]
+{zwsp} +
+
+We create a _Default_ instance of the _ServiceReconfiguration_ state machine class, and we'll point the *reconfigure* stage to the _/Integration/Satellite/Methods/SetConfiguration_ instance that we'll create (see <<c38i7>>).
+
+[[c38i7]]
+.Schema of the default instance
+image::images/ss7.png[Screenshot,450,align="center"]
+{zwsp} +
+
+==== Email Classes
+
+We need to create two new email instances with associated methods, to send emails when a service reconfigure is approved and completed. For convenience we'll just copy, rename and edit the _ManageIQ/Service/Provisioning/Email_ instances and methods (see <<c38i8>>).
+
+[[c38i8]]
+.Copied and renamed email instances and methods
+image::images/ss8.png[Screenshot,350,align="center"]
+{zwsp} +
+
+==== Policies
+
+We need to generate policy instances for two ServiceReconfigure events, _ServiceReconfigureRequest_created_ and __ServiceReconfigureRequest_approved__.
+
+We copy _ManageIQ/System/Policy/ServiceTemplateProvisionRequest_created_ into our domain as _System/Policy/ServiceReconfigureRequest_created_. We can leave the schema contents as they are because we'll use the same auto-approval state machine as when the service was originally provisioned.
+
+We copy _ManageIQ/System/Policy/ServiceTemplateProvisionRequest_approved_ into our domain as _/System/Policy/ServiceReconfigureRequest_approved_, and we edit the *rel5* state to point to our new _/Service/Reconfiguration/Email/ServiceReconfigurationRequestApproved_ email instance (see <<c38i9>>).
+
+[[c38i9]]
+.Copied and renamed policy instances
+image::images/ss9.png[Screenshot,350,align="center"]
+{zwsp} +
+
+=== Modifying the VM Provision Workflow
+
+We need to change our VM provision workflow to add a state to perform the initial configuration using the values input from the service dialog. We'll take the state machine that we used in <<integrating-with-satellite-6-during-provisioning>> and add a *SetConfiguration* stage after **RegisterSatellite**. *SetConfiguration* points to the same instance as our new _ServiceReconfiguration_ state machine's *reconfigure* stage (see <<c38i10>>).
+
+[[c38i10]]
+.Adding the SetConfiguration stage to the VM provision state machine
+image::images/ss10.png[Screenshot,600,align="center"]
+{zwsp} +
+
+=== Service Dialog
+
+We're going to create a completely dynamic service dialog, interacting with Satellite to retrieve information. The dialog will search the VMDB for configuration profiles (host groups) and present them in a drop-down list. For the host group selected, Satellite will be queried for the configured activation keys and Puppet classes, and these will be presented in drop-down lists. For the Puppet class selected, Satellite will be queried for the available smart class parameters and these will be presented in a drop-down list. Finally a text area box will be presented to optionally input an override parameter.
+
+==== Elements
+
+The service dialog will contain seven elements, of which the **Puppet Class**, *Smart Class Parameter* and *New Parameter Value* elements will be marked as *Reconfigurable*. The dialog elements are summarised in <<c38t1>>.
+
+[[c38t1]]
+.Dialog Elements
+[options="header"]
+|=======
+|Name|Type|Dynamic|Instance|Auto refresh|Auto refresh other fields|Reconfigurable
+|Service Name|Text Box|No|N/A|N/A|N/A|No
+|VM Name|Text Box|No|N/A|N/A|N/A|No
+|Host Group|Drop Down List|Yes|ListHostGroups|No|Yes|No
+|Activation Key|Drop Down List|Yes|ListActivationKeys|Yes|No|No
+|Puppet Class|Drop Down List|Yes|ListPuppetClasses|Yes|Yes|Yes
+|Smart Class Parameter|Drop Down List|Yes|ListSmartClassParameters|Yes|No|Yes
+|New Parameter Value|Text Area Box|No|N/A|N/A|N/A|Yes
+|=======
+
+When ordered the dialog will look like <<c38i12>>).
+
+[[c38i12]]
+.The Final Service Dialog
+image::images/ss12.png[Screenshot,500,align="center"]
+{zwsp} +
+
+=== Instances and Methods
+
+We need to create a number of instances and methods to populate the dynamic dialog elements of the service dialog.
+
+==== Dynamic Dialogs
+
+The dynamic dialog instances and methods are defined under an _/Integration/Satellite/DynamicDialogs_ namespace in our domain (see <<c38i13>>).
+
+[[c38i13]]
+.Dynamic Dialog Instances and Methods
+image::images/ss13.png[Screenshot,350,align="center"]
+{zwsp} +
+
+The schema for the _Methods_ class holds variables containing the credentials to connect to our Satellite server (we first used this technique in <<using-schema-variables>>).
+
+===== Common Functionality
+
+Each of the dynamic methods has a simple _rest_action_ method to perform the RESTful call to Satellite:
+
+[source,ruby]
+----
+def rest_action(uri, verb, payload=nil)
+  headers = {
+    :content_type  => 'application/json',
+    :accept        => 'application/json;version=2',
+    :authorization => \
+                   "Basic #{Base64.strict_encode64("#{@username}:#{@password}")}"
+  }
+  response = RestClient::Request.new(
+    :method      => verb,
+    :url         => uri,
+    :headers     => headers,
+    :payload     => payload,
+    verify_ssl: false
+  ).execute
+  return JSON.parse(response.to_str)
+end
+----
+
+They each pull the credentials from the instance schema, define the base URI and an empty values_hash:
+
+[source,ruby]
+----
+servername = $evm.object['servername']
+@username  = $evm.object['username']
+@password  = $evm.object.decrypt('password')
+
+uri_base = "https://#{servername}/api/v2"
+values_hash = {}
+----
+
+===== ListHostGroups
+
+The _list_hostgroups_ method does not need to connect to the Satellite RESTful API, as the Satellite server is registered as a configuration management provider. The method performs a simple VMDB lookup of all configuration profiles:
+
+[source,ruby]
+----
+hostgroups = $evm.vmdb(:configuration_profile).all
+
+if hostgroups.length > 0
+  if hostgroups.length > 1
+    values_hash['!'] = '-- select from list --'
+  end
+  hostgroups.each do |hostgroup|
+    $evm.log(:info, "Found Host Group '#{hostgroup.name}' \
+                                              with ID: #{hostgroup.manager_ref}")
+    values_hash[hostgroup.manager_ref] = hostgroup.name
+  end
+else
+  values_hash['!'] = 'No hostgroups are available'
+end
+----
+
+===== ListActivationKeys
+
+The _list_activationkeys_ method retrieves the hostgroup_id from the *Host Group* element, and makes a Satellite API call to get the hostgroup parameters:
+
+[source,ruby]
+----
+hg_id = $evm.object['dialog_hostgroup_id']
+
+if hg_id.nil?
+  values_hash['!'] = "Select a Host Group and click 'Refresh'"
+else
+  rest_return = rest_action("#{uri_base}/hostgroups/#{hg_id}/parameters", :get)
+  rest_return['results'].each do |hostgroup_parameter|
+    if hostgroup_parameter['name'].to_s == "kt_activation_keys"
+      hostgroup_parameter['value'].split(',').each do |activationkey|
+        values_hash[activationkey] = activationkey
+      end
+    end
+  end
+  if values_hash.length > 0
+    if values_hash.length > 1
+      values_hash['!'] = '-- select from list --'
+    end
+  else
+    values_hash['!'] = 'This Host Group has no Activation Keys'
+  end
+end
+----
+
+===== ListPuppetClasses
+
+The _list_puppetclasses_ method retrieves the hostgroup_id from the *Host Group* element, and makes a Satellite API call to get the Puppet classes associated with the host group:
+
+[source,ruby]
+----
+hg_id = $evm.object['dialog_hostgroup_id']
+
+if hg_id.nil?
+  values_hash['!'] = "Select a Host Group and click 'Refresh'"
+else
+  rest_return = rest_action("#{uri_base}/hostgroups/#{hg_id}/puppetclasses",:get)
+  if rest_return['total'] > 0
+    if rest_return['total'] > 1
+      values_hash['!'] = '-- select from list --'
+    end
+    rest_return['results'].each do |classname, classinfo|
+      values_hash[classinfo[0]['id'].to_s] = classname
+    end
+  else
+    values_hash['!'] = 'No Puppet Classes are defined for this Hostgroup'
+  end
+end
+----
+
+===== ListSmartClassParameters
+
+The _list_smart_class_parameters_ method retrieves the hostgroup_id and puppetclass_id from previous elements, and makes a Satellite API call to get the Puppet smart class parameters associated with the host group. For each parameter returned it then makes a further Satellite API call to cross-reference against the requested Puppet class:
+
+[source,ruby]
+----
+hg_id           = $evm.object['dialog_hostgroup_id']
+puppet_class_id = $evm.object['dialog_puppet_class_id']
+
+if puppet_class_id.nil?
+  values_hash['!'] = "Select a Puppet Class and click 'Refresh'"
+else
+  call_string = "#{uri_base}/hostgroups/#{hg_id}/smart_class_parameters"
+  rest_return = rest_action(call_string, :get)
+  rest_return['results'].each do |parameter|
+    #
+    # Retrieve the details of this smart class parameter 
+    # to find out which puppet class it's associated with
+    #
+    call_string = "#{uri_base}/hostgroups/#{hg_id}/"
+    call_string += "smart_class_parameters/#{parameter['id']}"
+    parameter_details = rest_action(call_string, :get)
+    if parameter_details['puppetclass']['id'].to_s == puppet_class_id
+      values_hash[parameter['id'].to_s] = parameter_details['parameter']
+    end
+  end
+  if values_hash.length > 0
+    if values_hash.length > 1
+      values_hash['!'] = '-- select from list --'
+    end
+  else
+    values_hash['!'] = 'This Puppet class has no Smart Class Parameters'
+  end
+end
+----
+
+Making several cross-referencing API calls to Satellite in this way may be slow if many Puppet classes with smart class variables are defined in our host group, but this technique is suitable for our example.
+
+==== Configuration-Related Methods
+
+We have three methods that handle the registration with Satellite and the setting of configuration.
+
+===== RegisterSatellite
+
+We edit the _register_satellite_ method from <<integrating-with-satellite-6-during-provisioning>> to take out the hardcoded selection of host group. We also bypass Satellite registration entirely if we don't find the hostgroup_id:
+
+[source,ruby]
+----
+#
+# Only register if the provisioning template is linux
+#
+if template.platform == "linux"
+  #
+  # Only register with Satellite if we've been passed a 
+  # hostgroup ID from a service dialog
+  #
+  hg_id = $evm.root['miq_provision'].get_option(:dialog_hostgroup_id)
+  unless hg_id.nil?
+    ...
+----
+
+===== ActivateSatellite
+
+We edit the _activate_satellite_ method from <<integrating-with-satellite-6-during-provisioning>> to take out the hardcoded selection of activation key. We also bypass Satellite activation entirely if we don't find the activation key name:
+
+[source,ruby]
+----
+#
+# Only register if the provisioning template is linux
+#
+prov = $evm.root['miq_provision']
+if template.platform == "linux"
+  #
+  # Only register and activate with Satellite if we've been passed an 
+  # activation key from a service dialog
+  #
+  activationkey = prov.get_option(:dialog_activationkey_name)
+  unless activationkey.nil?
+    ...
+----
+
+===== SetConfiguration
+
+The _set_configuration_ method will be called from two completely different state machines, once to perform an initial configuration during provisioning, and possibly again during a service reconfigure request. The method must retrieve the service dialog values from either of two different places:
+
+[source,ruby]
+----
+  if $evm.root['vmdb_object_type'] == 'miq_provision'
+    prov = $evm.root['miq_provision']
+    parameter_id    = prov.get_option(:dialog_parameter_id)
+    parameter_value = prov.get_option(:dialog_parameter_value)
+    hg_id           = prov.get_option(:dialog_hostgroup_id)
+    hostname        = prov.get_option(:dialog_vm_name)
+  elsif $evm.root['vmdb_object_type'] == 'service_reconfigure_task'
+    parameter_id    = $evm.root['dialog_parameter_id']
+    parameter_value = $evm.root['dialog_parameter_value']
+    hg_id           = $evm.root['dialog_hostgroup_id']
+    hostname        = $evm.root['dialog_vm_name']  
+  end
+----
+
+If a smart class parameter override value has not been input the method simply exits:
+
+[source,ruby]
+----
+  #
+  # Only set the smart class parameter if we've been passed a 
+  # parameter value from a service dialog
+  #
+  unless parameter_value.nil?
+     ...
+----
+
+The method must fetch the default domain name from the host group to assemble the correct FQDN for the match:
+
+[source,ruby]
+----
+rest_return = rest_action("#{uri_base}/hostgroups/#{hg_id}", :get)
+domain_name = rest_return['domain_name']
+match = "fqdn=#{hostname}.#{domain_name}"
+----
+
+The method must also determine whether the override match already exists. If it doesn't exist it must be created with a POST action; if it does exist is must be updated with a PUT action:
+
+[source,ruby]
+----
+call_string = "#{uri_base}/smart_class_parameters/"
+call_string += "#{parameter_id}/override_values"
+rest_return = rest_action(call_string, :get)
+override_value_id = 0
+if rest_return['total'] > 0
+  rest_return['results'].each do |override_value|
+    if override_value['match'] == match
+      override_value_id = override_value['id']
+    end
+  end
+end
+if override_value_id.zero?
+  payload = {
+    :match => match,
+    :value => parameter_value
+  }
+  call_string = "#{uri_base}/smart_class_parameters/"
+  call_string += "#{parameter_id}/override_values"
+  rest_return = rest_action(call_string, :post, JSON.generate(payload))
+else
+  payload = {
+    :value => parameter_value
+  }
+  call_string = "#{uri_base}/smart_class_parameters/"
+  call_string =+ "#{parameter_id}/override_values/#{override_value_id}"
+  rest_return = rest_action(call_string, :put, JSON.generate(payload))
+end
+----
+
+Here we see that +match+ is the FQDN of the server. If an override match doesn't exist for this smart class parameter, we create one using the server FQDN and the value to override. If an override match based on the FQDN does exist, we simply update the override value.
+
+The full code for the methods is
+https://github.com/pemcg/oreilly-mastering-cloudforms-automation/tree/master/chapter38/scripts[here]
+
+=== Testing
+
+We'll order a new service, and select appropriate host group and activation keys from the drop-downs. We'll select the _motd_ Puppet class, and override the _content_ smart class parameter (see <<c38i14>>).
+
+[[c38i14]]
+.Setting an initial value for motd when provisoning a service
+image::images/ss14.png[Screenshot,550,align="center"]
+{zwsp} +
+
+We click *Submit*, and wait for our newly provisioned service.
+
+Logging in to the newly provisioned server confirms that the motd has been set:
+
+....
+Last login: Wed Mar 23 17:14:34 2016 from miq05.bit63.net
+#
+Next Q/A Team meeting 23rd April 2016
+#
+[root@rhel7srv034 ~]#
+....
+
+If we look at the details of our new service in *My Services* and select **Configuration -> Reconfigure This Service**, we are again presented with the service dialog, but the elements not marked as *Reconfigurable* are read-only (see <<c38i15>>).
+
+[[c38i15]]
+.Setting new value for motd when reconfiguring the service
+image::images/ss15.png[Screenshot,550,align="center"]
+{zwsp} +
+
+We can select the _motd_ Puppet class again, enter a new value for the _content_ smart class parameter, and click **Submit**.
+
+We receive an email informing us that the reconfiguration request has been approved:
+
+....
+Hello, 
+Your Service reconfiguration request was approved. If Service reconfiguration 
+is successful you will be notified via email when the Service is available.
+
+Approvers notes: Auto-Approved
+
+To view this Request go to: https://miq05/miq_request/show/1000000000109
+
+Thank you,
+Virtualization Infrastructure Team
+....
+
+We can login to the Satellite 6 User Interface to confirm that the "Override value for specific hosts" contains our updated value against the match filter (see <<c38i16>>).
+
+[[c38i16]]
+.Confirming the Puppet Smart Class Parameter in Satellite
+image::images/ss16.png[Screenshot,550,align="center"]
+{zwsp} +
+
+Once the Puppet agent has run on the client again, we can login and see the new message:
+
+....
+Last login: Wed Mar 23 17:35:50 2016 from miq05.bit63.net
+#
+Next Q/A Team meeting date changed, now 21st April 2016
+#
+#[root@rhel7srv034 ~]#
+....
+
+=== Summary
+
+This chapter builds on several topics and examples that we've worked through so far in the book. It extends the integration with Satellite 6 that we covered in <<integrating-with-satellite-6-during-provisioning>>, and shows how we can dynamically present lists of activation keys or Puppet classes with values retrieved from the Satellite server at run time. We configured some of the service dialog elements to auto-refresh, so that a selection made from one element automatically runs the refresh methods to populate other dependent elements. Some of the dialog elements were reconfigurable as well, so that their values can be updated. This is a pretty advanced example that shows what can be done from a service catalog. 
+
+Finally, this example builds on the concept of using services as workload orchestrators and shows how we can set and update our service configuration from a single tool. This is a powerful concept, and means that we can use our service catalog as the single control point for deploying and configuring our workloads.
+
+

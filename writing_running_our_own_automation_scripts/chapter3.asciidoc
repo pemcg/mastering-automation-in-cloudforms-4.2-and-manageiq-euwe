@@ -1,0 +1,210 @@
+[[writing-running-our-own-automation-scripts]]
+== Writing and Running Our Own Automation Scripts
+
+Let's jump right in and start writing our first automation script. In time-honoured fashion we'll write "Hello, World!" to the Automate logfile.
+
+Before we do anything we need to ensure that the *Automation Engine* server role is ticked on our ManageIQ appliance. We do this from the *Configure -> Configuration* menu, selecting the ManageIQ server in the _Settings_ accordion (see <<i1>>).
+
+[TIP]
+====
+The *Automation Engine* server role is now enabled by default in CloudForms 4.0 (ManageIQ _Capablanca_) and later, but it's still worthwhile to check that this role is set on our ManageIQ appliance.
+====
+
+[[i1]]
+.Setting the Automation Engine server role
+image::images/ss1.png[Screenshot,330,align="center"]
+{zwsp} +
+
+'''
+.The Automation Engine Role
+****
+Setting the *Automation Engine* role is necessary to be able to run _queued_ Automate tasks (this includes anything that starts off as an automation __request__, which we'll cover later in link:../requests_and_tasks/chapter.asciidoc[Requests and Tasks]). Automate actions initiated directly from the WebUI - such as running instances from simulation, or processing methods to populate dynamic dialogs - are run on the WebUI appliance itself, regardless of whether it has the *Automation Engine* role enabled.
+
+Our first Automate examples in the book will be run from simulation, so we don't need the *Automation Engine* role to be set for these to work. When we move on to more advanced ways of running our scripts we will need the role enabled, so by checking that it's set now, we'll have one less thing to troubleshoot as we progress through the book.
+****
+'''
+
+=== Creating the Environment
+
+Before we create our first automation script, we need to put some things in place. We'll begin by adding a new domain called _ACME_. We'll add all of our automation code into this new domain.
+
+==== Adding a New Domain
+
+In the Automate Explorer, highlight the *Datastore* icon, and click *Configuration -> Add a New Domain* (see <<i2>>).
+
+[[i2]]
+.Adding a new domain
+image::images/ss2.png[Screenshot,450,align="center"]
+{zwsp} +
+
+We'll give the domain the *Name* _ACME_, the *Description* _ACME Corp._, and ensure the *Enabled* checkbox is selected.
+
+==== Adding a Namespace
+
+Now we'll add a namespace into this domain, called __General__. Highlight the _ACME_ domain icon in the sidebar, and click **Configuration -> Add a New Namespace** (see <<i3>>).
+
+[[i3]]
+.Adding a new namespace
+image::images/ss3.png[Screenshot,450,align="center"]
+{zwsp} +
+
+Give the namespace the *Name* _General_ and the *Description* _General Content_
+
+==== Adding a Class
+
+Now we'll add a new class, called __Methods__. 
+
+[NOTE]
+It may seem that naming a class "Methods" is somewhat confusing, however many of the generic classes in the _ManageIQ_ domain in the Automate Datastore are called "Methods" to signify their general-purpose nature).
+
+Highlight the _General_ domain icon in the sidebar, and click *Configuration -> Add a New Class* (see <<i4>>).
+
+[[i4]]
+.Adding a new class
+image::images/ss4.png[Screenshot,450,align="center"]
+{zwsp} +
+
+Give the class the *Name* _Methods_ and the *Description* _General Instances and Methods_. We'll leave the *Display Name* empty for this example.
+
+==== Editing the Schema
+
+We'll create a simple schema. Click the *Schema* tab for the _Methods_ class, and click **Configuration -> Edit selected Schema** (see <<i5>>).
+
+[[i5]]
+.Editing the schema
+image::images/ss5.png[Screenshot,600,align="center"]
+{zwsp} +
+
+Click **New Field**, and add a single field with name __execute__, *Type* _Method_ and *Data Type* __String__ (see <<i6>>).
+
+[[i6]]
+.Adding a new schema field
+image::images/ss6.png[Screenshot,550,align="center"]
+{zwsp} +
+
+Click the *tick* icon in the lefthand column to save the field entry, and click the *Save* button to save the schema. We now have our generic class definition called _Methods_ setup, with a simple schema that executes a single method.
+
+=== Hello, World!
+
+Our first Automate method is very simple, we'll write an entry to the _automation.log_ file using a two-line script:
+
+[source,ruby]
+----
+$evm.log(:info, "Hello, World!")
+exit MIQ_OK
+----
+
+==== Adding a New Instance
+
+As mentioned in link:../introduction_to_the_automate_datastore/chapter.asciidoc[Introduction to the Automate Datastore] the Automation Engine runs scripts within the context of _instances_, so first we need to create an instance from our class. In the *Instances* tab of the new *Methods* class, select **Configuration -> Add a New Instance** (see <<i8>>).
+
+[[i8]]
+.Adding a new instance to our class
+image::images/ss8.png[Screenshot,500,align="center"]
+{zwsp} +
+
+We'll call the instance __hello_world__, and it'll run (execute) a method called __hello_world__ (see <<i9>>).
+
+[[i9]]
+.Entering the instance details
+image::images/ss9.png[Screenshot,430,align="center"]
+{zwsp} +
+
+Click the *Add* button.
+
+==== Adding a New Method
+
+In the *Methods* tab of the new _Methods_ class, select **Configuration -> Add a New Method** (see <<i10>>).
+
+[[i10]]
+.Adding a new method to our class
+image::images/ss10.png[Screenshot,500,align="center"]
+{zwsp} +
+
+Name the method _hello_world_, and paste our two lines of code into the *Data* window (see <<i11>>).
+
+[[i11]]
+.Entering the method details
+image::images/ss11.png[Screenshot,430,align="center"]
+{zwsp} +
+
+Click *Validate*, and then the *Add* button.
+
+[TIP]
+Get into the habit of using the *Validate* button, it can save a lot of time catching Ruby syntactical typos when you develop more complex scripts
+
+=== Running the Instance
+
+We'll run our new instance using the _Simulation_ functionality of Automate, but before we do that, login to CloudForms/ManageIQ again from another browser or a private browsing tab, and navigate to *Automate -> Log* in the WebUI footnote:[Alternatively ssh into the appliance as _root_, and `tail -f /var/www/miq/vmdb/log/automation.log`]
+
+[NOTE]
+The CloudForms/ManageIQ WebUI uses browser session cookies, so if we want two or more concurrent login sessions (particularly as different users), it helps to use different web browsers or private/incognito windows.
+
+In the simulation we actually run an instance called _call_instance_ in the _/System/Request/_ namespace of the _ManageIQ_ domain, and this in turn calls our _hello_world_ instance using the _namespace_, _class_ and _instance_ attribute/value pairs that we pass to it (see link:../ways_of_entering_automate/chapter.asciidoc[Ways of Entering Automate]).
+
+From the *Automate -> Simulation* menu, complete the details (see <<i12>>).
+
+[[i12]]
+.Completing the Simulation details
+image::images/ss12.png[Screenshot,480,align="center"]
+{zwsp} +
+
+Click *Submit*
+
+If all went well, we should see our "Hello, World!" message appear in the _automation.log_ file.
+
+....
+Invoking [inline] method [/ACME/General/Methods/hello_world] with inputs [{}]
+<AEMethod [/ACME/General/Methods/hello_world]> Starting
+<AEMethod hello_world> Hello, World!
+<AEMethod [/ACME/General/Methods/hello_world]> Ending
+Method exited with rc=MIQ_OK
+....
+
+Success!
+
+=== Exit Status Codes
+
+In our example we used an exit status code of MIQ_OK. Although with simple methods such as this we don't strictly need to specify an exit code, it's good practice to do so. When we build more advanced multimethod classes and state machines, an exit code can signal an error condition to the Automation Engine so that action can be taken.
+
+There are four exit codes that we can use:
+
+*MIQ_OK* (0) - Continues normal processing. This is logged to _automation.log_ as:
+
+....
+Method exited with rc=MIQ_OK
+....
+
+*MIQ_WARN* (4) - Warning message, continues processing. This is logged to _automation.log_ as:
+
+....
+Method exited with rc=MIQ_WARN
+....
+
+*MIQ_ERROR / MIQ_STOP* (8) - Stops processing current object. This is logged to _automation.log_ as:
+
+....
+Stopping instantiation because [Method exited with rc=MIQ_STOP]
+....
+
+*MIQ_ABORT* (16) - Aborts entire automation instantiation. This is logged to _automation.log_ as:
+
+....
+Aborting instantiation because [Method exited with rc=MIQ_ABORT]
+....
+
+[NOTE]
+====
+
+The difference between MIQ_STOP and MIQ_ABORT is subtle, but comes into play as we develop more advanced Automate workflows.
+
+MIQ_STOP stops the currently running instance, but if this instance was called via a reference from another ‘parent’ instance, the subsequent steps in the parent instance would still complete.
+
+MIQ_ABORT stops the currently running instance and any parent instance that called it, terminating the Automate task altogether. 
+====
+
+=== Summary
+
+In this chapter we've seen how simple it is to create our own domain, namespace, class, instance and method, and run our script from simulation. These are the fundamental techniques that we use for all of our automation scripts, and we'll use this knowledge extensively as we progress through the book.
+
+We've also discovered the status codes that we should use to pass our exit status back to the Automation Engine.

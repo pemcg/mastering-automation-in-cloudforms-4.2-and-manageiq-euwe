@@ -1,0 +1,72 @@
+= Mastering Automation in {product-name} {product-version}
+:author: Peter McGowan
+:revnumber: v1.0
+:revdate: 2016-06
+:sectnums:
+:sectnumlevels: 1
+:chapter-label:
+:doctype: book
+:toc:
+:caption:
+:product-name: CloudForms
+:product-version: 4.1
+:product-version-1: 3.1
+:product-version-2: 3.2
+:product-version-3: 4.0
+:product-version-4: 4.1
+:backend: pdf
+
+include::preface.asciidoc[]
+include::part1.asciidoc[]
+include::chapter1.asciidoc[]
+include::chapter2.asciidoc[]
+include::chapter3.asciidoc[]
+include::chapter4.asciidoc[]
+include::chapter5.asciidoc[]
+include::chapter6.asciidoc[]
+include::chapter7.asciidoc[]
+include::chapter8.asciidoc[]
+include::chapter9.asciidoc[]
+include::chapter10.asciidoc[]
+include::chapter11.asciidoc[]
+include::chapter12.asciidoc[]
+include::chapter13.asciidoc[]
+include::chapter14.asciidoc[]
+include::chapter15.asciidoc[]
+include::part2.asciidoc[]
+include::chapter16.asciidoc[]
+include::chapter17.asciidoc[]
+include::chapter18.asciidoc[]
+include::chapter19.asciidoc[]
+include::chapter20.asciidoc[]
+include::chapter21.asciidoc[]
+include::chapter22.asciidoc[]
+include::chapter23.asciidoc[]
+include::chapter24.asciidoc[]
+include::chapter25.asciidoc[]
+include::chapter26.asciidoc[]
+include::chapter27.asciidoc[]
+include::chapter28.asciidoc[]
+include::part3.asciidoc[]
+include::chapter29.asciidoc[]
+include::chapter30.asciidoc[]
+include::chapter31.asciidoc[]
+include::chapter32.asciidoc[]
+include::chapter33.asciidoc[]
+include::chapter34.asciidoc[]
+include::chapter35.asciidoc[]
+include::chapter36.asciidoc[]
+include::chapter37.asciidoc[]
+include::chapter38.asciidoc[]
+include::chapter39.asciidoc[]
+include::part4.asciidoc[]
+include::chapter40.asciidoc[]
+include::chapter41.asciidoc[]
+include::part5.asciidoc[]
+include::chapter42.asciidoc[]
+include::chapter43.asciidoc[]
+include::chapter44.asciidoc[]
+include::part6.asciidoc[]
+include::chapter45.asciidoc[]
+include::chapter46.asciidoc[]
+include::chapter47.asciidoc[]

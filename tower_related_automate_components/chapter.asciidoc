@@ -1,0 +1,391 @@
+[[tower-related-automate-components]]
+== Tower-Related Automate Components
+
+In this chapter we'll learn how to integrate Ansible playbooks into our Automate workflows. We'll look at the Tower-related components in the Automate datastore, and how we can use them to interact with Ansible Tower and launch jobs. We'll also take a look at the service model objects that represent Tower jobs, job templates and inventories, and the useful characteristics of each that we can access from automation scripts.
+
+=== Automate Datastore Components
+
+The Tower-related Automate code is in the _ManageIQ_ domain, under the _ConfigurationManagement/AnsibleTower_ namespace. The _Operations_ namespace contains the _JobTemplate_ and _StateMachines/Job_ classes (see <<i1>>).
+
+[[i1]]
+.ConfigurationManagement/AnsibleTower namespace
+image::images/ss1.png[Screenshot,350,align="center"]
+{zwsp} +
+
+[NOTE]
+====
+There is a further namespace called _Service_ under _ConfigurationManagement/AnsibleTower_ that contains the service-related Automate components, but we'll cover these in a later chapter.
+====
+
+==== Job State Machine
+
+The _Job_ state machine class provides the workflow to integrate with Ansible Tower. The out-of-the-box class has a single instance called _default_ that contains three states (see <<i2>>).
+
+[[i2]]
+.Fields of the default state machine
+image::images/ss3.png[Screenshot,800,align="center"]
+{zwsp} +
+
+===== WaitForIP
+
+The *WaitForIP* state calls the __wait_for_ip__ method, which waits for the `vm.ipaddresses` list attribute to be non-empty. The `vm` object is populated from either `$evm.root['miq_provision'].destination` (i.e. the VM resulting from a provisioning operation) or `$evm.root['vm']` (i.e. the current VM object loaded from a button operation).
+
+[NOTE]
+====
+The native virtual infrastructure guest agent such as VMware tools or the RHEV-M management agent must be installed and running in the target VM for the `ipaddresses` list attribute to be populated.
+
+The __wait_for_ip__ method does not attempt to power-on the virtual machine. If the VM is not powered on by some other workflow step or manual operation, this state will exit with an error after 100 retries.
+====
+
+===== Launch
+
+The *Launch* state calls the __launch_ansible_job__ method. This method uses arguments passed to `$evm.object` to determine the job template to be run, and any extra variables that should be passed to the job. 
+
+For flexibility the method is able to identify the job template to be run in three ways, as follows (in order):
+
+1. From the value of `$evm.object['job_template']` if it exists, which should be a  `ManageIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript` object.
+2. From the value of `$evm.object['job_template_name']` if it exists, which should be a text string containing the job template name (e.g. "Tomcat Standalone Server")
+3. From the value of `$evm.object['job_template_id']` if it exists, which should be a text string containing the job template ID (e.g. "342")
+
+The __launch_ansible_job__ method also uses different ways to search for arguments to pass to the job template as extra variables.
+
+1. If the _Job/default_ state machine has been called as part of a provisioning operation (and therefore `$evm.root['miq_provision']` exists), the __launch_ansible_job__ method searches the provisioning task options hash for keys with a name in the style `dialog_param_<extra_var>`. If any are found then the `<extra_var>` part is extracted from the key name, and it and the value are passed to the job template as extra variables.
+
+2. The __launch_ansible_job__ method also searches `$evm.object` and all of its parent instances up to `$evm.root` for attribute keys with either the style `dialog_param_<extra_var> = value` or `dialog<n> = <extra_var>=value`. For example if passing an extra variable called "package_name" with the value "vim-enhanced", we could use either of the following styles:
+
+[source,ruby]
+----
+$evm.object['dialog_param_package_name'] = 'vim-enhanced'
+----
+
+or
+
+[source,ruby]
+----
+$evm.object['param1'] = 'package_name=vim-enhanced'
+----
+
+The first style makes it easy for us to prompt for extra variables from a service dialog. In this example we need only give our service dialog element the name "param_package_name", and the value is ready to pass into the state machine.
+
+Once __launch_ansible_job__ has successfully launched the job template in the Ansible Tower provider, it saves the job ID as the state variable `:ansible_job_id` for reference elsewhere in the state machine.
+
+===== WaitForCompletion
+
+The *WaitForCompletion* state calls the __wait_for_completion__ method. This reads the saved job ID from the `:ansible_job_id` state variable, and polls the Ansible Tower provider for the job completion status.
+
+The method exits with `$evm.root['ae_result']` set to 'error', 'retry' or 'ok' as appropriate, and prints a message to _automation.log_ in the case of an error.
+
+==== Calling the State Machine from an Automate Method
+
+We can easily run an Ansible Tower job template on any virtual machine from an Automate method. 
+
+In this example we'll run a job template called 'Install Single Package' on a VM called 'testserver02'. We'll pass to the job template the extra variable 'package_name' with the value 'screen'. For the example use-case the code snippet is not running as part of a provisioning operation, nor called from a button on the VM in the WebUI. It therefore must load the VM object into `$evm.root['vm']` itself. 
+
+[source,ruby]
+----
+PATH = '/ConfigurationManagement/AnsibleTower/Operations/StateMachines/Job/default'.freeze
+SCRIPT_CLASS = 'ManageIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript'.freeze
+VM_CLASS = 'VmOrTemplate'.freeze
+#
+# Lookup the job template object and attach as $evm.object['job_template']
+#
+$evm.object['job_template'] = $evm.vmdb(SCRIPT_CLASS).find_by_name('Install Single Package')
+#
+# Lookup the VM object and attach as $evm.root['vm']
+#
+$evm.root['vm'] = $evm.vmdb(VM_CLASS).find_by_name('testserver02')
+#
+# Power on the VM of it's not already on
+#
+$evm.root['vm'].start if $evm.root['vm'].power_state != 'on'
+#
+# Define our URI to call the state machine, including the extra_var as an argument
+#
+uri = "#{PATH}?param1=package_name%3Dscreen"
+#
+# Call the state machine
+#
+$evm.instantiate(uri)
+----
+
+Rather than looking up the `SCRIPT_CLASS` object and attaching that to `$evm.object['job_template']`, we could have passed the job template name as an argument in the URI, for example:
+
+[source,ruby]
+----
+uri = "#{PATH}?job_template_name=Install%20Single%20Package&param1=package_name%3Dscreen"
+----
+
+Using the alternative syntax for argument passing, we could re-write this as follows: 
+
+[source,ruby]
+----
+uri = "#{PATH}?job_template_name=Install%20Single%20Package&dialog_param_package_name=screen"
+----
+
+[NOTE]
+====
+If our URI contains reserved or unsafe characters, we must URL-encode them. In these examples we have replaced ' ' with '%20' and '=' with '%3D'
+====
+
+==== Calling the State Machine from an Instance
+
+We can call the _Job/default_ state machine directly from a relationship in an instance, and even pass extra variable arguments from schema attributes. This gives us the flexibility to be able to combine Ruby methods and Ansible playbooks in a single instance if we wish (see <<i3>>).
+
+[[i3]]
+.Combining Ruby methods and Ansible playbooks in a single instance 
+image::images/ss6.png[Screenshot,800,align="center"]
+{zwsp} +
+
+[[job_template_class]]
+==== JobTemplate Class
+
+The JobTemplate class has been created to simplify the process of calling Ansible job templates with no requirement for any Ruby scripting. We can call this class using a relationship URI that ends with the name of an Ansible job template. An example showing a relationship field calling the "JBoss_Standalone_Server" job template is shown in <<i4>>.
+
+[[i4]]
+.Calling the JBoss_Standalone_Server Ansible job template
+image::images/ss4.png[Screenshot,800,align="center"]
+{zwsp} +
+
+If there is no instance in the JobTemplate class with the same name as the job template (in this example "JBoss_Standalone_Server"), the _.missing_ instance will be called (see <<i5>>).
+
+[[i5]]
+.Fields of the .missing instance
+image::images/ss2.png[Screenshot,550,align="center"]
+{zwsp} +
+
+The _.missing_ instance uses the translated `${#_missing_instance}` substitution variable (which in this example will contain the string "JBoss_Standalone_Server") as the value for the *job_template_name* attribute. The instance then runs the __Job/default__ state machine from the *Launch* field.
+
+[NOTE]
+====
+To take advantage of the _.missing_ instance behaviour in this way, our job template name should contain no spaces. The default extra variables will be used when the job is run (we can't pass parameters to the job template). 
+====
+
+===== User-defined JobTemplate Instances
+
+If we have job templates that we call regularly with overriden extra variables, or that contain spaces in the template name, we can define our own instances under _/ConfigurationManagement/AnsibleTower/Operations/JobTemplate_ in a custom domain (see <<i5>>).
+
+[[i5]]
+.User-defined JobTemplate instances
+image::images/ss5.png[Screenshot,700,align="center"]
+{zwsp} +
+
+These custom instances can then be called in the usual manner.
+
+==== /System/Request/ansible_tower_job
+
+There is an entry point under _/System/Request_ called __ansible_tower_job__ that we can call from any WebUI component that expects an entry point under _/System/Request_ (such as a button). This entry point contains a single relationship to __/ConfigurationManagement/AnsibleTower/Operations/StateMachines/Job/default__, so we must pass additional arguments such as "job_template_name" as attribute/value pairs.
+
+=== Service Models
+
+There are several service models that are of interest to us when we use use the capabilities of Ansible Tower from our automation scripts.
+
+==== ManageIQ_Providers_AnsibleTower_ConfigurationManager_Job
+
+The ManageIQ_Providers_AnsibleTower_ConfigurationManager_Job object represents an Ansible Tower job. An object_walker printout of a typical object is as follows:
+
+```
+--- attributes follow ---
+job.ancestry = nil
+job.cloud_tenant_id = nil
+job.created_at = 2016-11-23 17:38:00 UTC
+job.description = nil
+job.ems_id = 4 
+job.ems_ref = 145 
+job.id = 49 
+job.name = JBoss_Standalone_Server
+job.orchestration_template_id = 5
+job.resource_group = nil
+job.retired = nil
+job.retirement_last_warn = nil
+job.retirement_requester = nil
+job.retirement_state = nil
+job.retirement_warn = nil
+job.retires_on = nil
+job.status = pending 
+job.status_reason = nil
+job.type = ManageIQ::Providers::AnsibleTower::ConfigurationManager::Job
+job.updated_at = 2016-11-23 17:38:00 UTC
+--- end of attributes ---
+--- virtual columns follow ---
+job.region_description = Region 0 
+job.region_number = 0 
+job.total_cloud_networks = 0 
+job.total_security_groups = 0  
+job.total_vms = 0 
+--- end of virtual columns ---
+--- associations follow ---
+job.ext_management_system 
+job.job_template
+job.outputs 
+job.parameters 
+job.resources 
+--- end of associations ---
+--- methods follow ---
+job.add_to_service
+job.error_retiring?
+job.finish_retirement
+job.inspect
+job.inspect_all
+job.model_suffix
+job.normalized_live_status
+job.raw_delete_stack
+job.raw_exists?
+job.raw_stdout
+job.raw_update_stack
+job.refresh_ems
+job.reload
+job.remove_from_vmdb
+job.retire_now
+job.retired?
+job.retirement_state=
+job.retirement_warn=
+job.retires_on=
+job.retiring?
+job.start_retirement
+job.tag_assign
+job.tag_unassign
+job.tagged_with?
+job.tags
+--- end of methods ---
+--- object does not support custom attributes ---
+```
+
+From this listing we notice several useful properties. There are some interesting attributes, including:
+
+* `job.ems_ref` corresponds to the Job ID in Ansible Tower.
+* `job.orchestration_template_id` is the CloudForms/ManageIQ ID of the Ansible Tower job template
+* `job.status`, is the job status, but this is not necessarily current (see `normalized_live_status` below)
+
+
+The `job.parameters` association is a list of OrchestrationStackParameter service model objects representing the parameters (i.e. extra variables) that were used when the job was run. Typical attributes of a parameter object are as follows:
+
+```
+parameter.ems_ref = 145_http_port 
+parameter.id = 260 
+parameter.name = http_port 
+parameter.stack_id = 49 
+parameter.value = 80 
+```
+
+There are several useful ManageIQ_Providers_AnsibleTower_ConfigurationManager_Job methods that we can call, including:
+
+* `job.normalized_live_status` will return the current job status as a [status, reason] array from Ansible Tower.  This is the method that __/ConfigurationManagement/AnsibleTower/Operations/StateMachines/Job/wait_for_completion__ calls to determine job status, and typical values might be ["create_complete", "OK"], or ["failed", "Job launching failed"].
+* `job.raw_stdout` will return the raw output from the job, such as:
+
+```
+"Identity added: /tmp/ansible_tower_Qa8enO/credential (/tmp/ansible_tower_Qa8enO/credential)\r\nVault password: \r\n\r\nPLAY [Install Package] *********************************************************\r\n\r\nTASK [setup] *******************************************************************\r\nok: [..."
+```
+
+From the tag-related methods we see that a ManageIQ_Providers_AnsibleTower_ConfigurationManager_Job object is taggable.
+
+==== MIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript
+
+The ManageIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript object represents an Ansible Tower job template. An object_walker printout of a typical object is as follows:
+
+```
+--- attributes follow ---
+configuration_script.created_at = 2016-11-18 16:20:17 UTC   
+configuration_script.description = Install a JBoss Standalone Server
+configuration_script.id = 5  
+configuration_script.inventory_root_group_id = 8 
+configuration_script.manager_id = 4 
+configuration_script.manager_ref = 48 
+configuration_script.name = JBoss_Standalone_Server 
+configuration_script.survey_spec = {} 
+configuration_script.type = ManageIQ::Providers::AnsibleTower::ConfigurationManager...Script
+configuration_script.updated_at = 2016-11-23 17:37:25 UTC 
+configuration_script.variables = {"http_port"=>80, "https_port"=>443} 
+--- end of attributes ---
+--- virtual columns follow ---
+configuration_script.region_description = Region 0 
+configuration_script.region_number = 0 
+--- end of virtual columns ---
+--- associations follow ---
+configuration_script.inventory_root_group 
+configuration_script.manager    
+--- end of associations ---
+--- methods follow ---
+configuration_script.inspect
+configuration_script.inspect_all
+configuration_script.model_suffix
+configuration_script.reload
+configuration_script.run
+configuration_script.tag_assign
+configuration_script.tag_unassign
+configuration_script.tagged_with?
+configuration_script.tags
+--- end of methods ---
+--- object does not support custom attributes ---
+```
+
+From this object we can see a number of useful properties, including the following attributes:
+
+* `configuration_script.properties`, which is a hash containing the default extra variables that have been defined for the job template in Ansible Tower (we may wish to display these as element defaults in a service dialog for example). 
+* `configuration_script.manager_ref` is the Ansible Tower ID for the job template.
+
+The association `configuration_script.inventory_root_group` contains the ManageIQ_Providers_ConfigurationManager_InventoryRootGroup object that represents the Tower inventory that the job template is defined to run against (see below).
+
+We see that a ManageIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript object is also taggable.
+
+==== ManageIQ_Providers_ConfigurationManager_InventoryRootGroup
+
+The ManageIQ_Providers_ConfigurationManager_InventoryRootGroup object represents an Ansible Tower inventory. An object_walker printout of a typical object is as follows:
+
+```
+--- attributes follow ---
+inventory_root_group.created_on = 2016-10-19 15:38:35 UTC 
+inventory_root_group.ems_id = 4 
+inventory_root_group.ems_ref = 4 
+inventory_root_group.ems_ref_obj = nil
+inventory_root_group.hidden = nil
+inventory_root_group.id = 8  
+inventory_root_group.name = CloudForms VMs  
+inventory_root_group.type = ManageIQ::Providers::ConfigurationManager::InventoryRootGroup 
+inventory_root_group.uid_ems = nil
+inventory_root_group.updated_on = 2016-10-19 15:38:35 UTC  
+--- end of attributes ---
+--- virtual columns follow ---
+inventory_root_group.aggregate_cpu_speed = 0 
+inventory_root_group.aggregate_cpu_total_cores = 0   
+inventory_root_group.aggregate_disk_capacity = 0  
+inventory_root_group.aggregate_logical_cpus = 0   
+inventory_root_group.aggregate_memory = 0 
+inventory_root_group.aggregate_physical_cpus = 0 
+inventory_root_group.aggregate_vm_cpus = 0  
+inventory_root_group.aggregate_vm_memory = 0  
+inventory_root_group.region_description = Region 0 
+inventory_root_group.region_number = 0  
+inventory_root_group.total_configured_systems = 15 
+--- end of virtual columns ---
+--- associations follow ---
+inventory_root_group.configuration_scripts 
+inventory_root_group.hosts 
+inventory_root_group.manager
+inventory_root_group.vms
+--- end of associations ---
+--- methods follow ---
+inventory_root_group.folder_path
+inventory_root_group.inspect
+inventory_root_group.inspect_all
+inventory_root_group.model_suffix
+inventory_root_group.register_host
+inventory_root_group.reload
+inventory_root_group.tag_assign
+inventory_root_group.tag_unassign
+inventory_root_group.tagged_with?
+inventory_root_group.tags
+--- end of methods ---
+--- object does not support custom attributes ---
+```
+
+The most useful properties from this object are `inventory_root_group.name`, and `inventory_root_group.ems_ref`, which is the Ansible Tower ID for the inventory.
+
+As with the other two objects, a ManageIQ_Providers_ConfigurationManager_InventoryRootGroup object is also taggable.
+
+=== Summary
+
+This chapter has explored the features of Automate introduced in CloudForms 4.1/ManageIQ _Darga_ that allow us to integrate with Ansible Tower. They allow us to easily call Tower jobs, either from a running Automate Ruby method, or from a simple instance relationship. We don't necessarily need to write any Ruby code to launch an Ansible Tower job, we can just create a class and instance in the Automate datastore and call this from a button, or - as we'll see in a later chapter - as a service.
+
+==== Further Reading
+
+http://talk.manageiq.org/t/launching-ansible-tower-job-templates-from-manageiq/1394[Launching Ansible Tower Job Templates from ManageIQ]

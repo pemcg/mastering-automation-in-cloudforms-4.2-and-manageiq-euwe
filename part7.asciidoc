@@ -1,0 +1,6 @@
+[[part7]]
+[part]
+:numbered!:
+== Miscellaneous
+
+Part VII wraps up the book with some miscellaneous topics.
