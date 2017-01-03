@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 #
-# service_via_api
+# approve_request_via_api
 #
 # Author:   Peter McGowan (pemcg@redhat.com)
 #           Copyright 2016 Peter McGowan, Red Hat
@@ -21,7 +21,7 @@ begin
             :action        => nil,
             }
   parser = OptionParser.new do|opts|
-    opts.banner = "Usage: service_via_api.rb [options]"
+    opts.banner = "Usage: approve_request_via_api.rb [options]"
     opts.on('-s', '--server server', 'CloudForms server to connect to') do |server|
       options[:server] = server
     end
