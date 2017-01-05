@@ -4,7 +4,7 @@
 When we use the Automate capability of CloudForms/ManageIQ, we write scripts in the Ruby language, and use objects that the _Automation Engine_ makes available to us. The CloudForms/ManageIQ Web User Interface (WebUI) allows us to access the Automate functionality via the *Automate* top-level menu (see <<i1>>).
 
 [[i1]]
-.Automate top-tevel menu for CloudForms 4.2
+.Automate top-level menu for CloudForms 4.2
 image::images/ss1.png[screenshot,270,align="center"]
 {zwsp} +
 
