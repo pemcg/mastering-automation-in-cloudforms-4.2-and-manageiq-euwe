@@ -4,7 +4,7 @@
 When we use the Automate capability of CloudForms/ManageIQ, we write scripts in the Ruby language, and use objects that the _Automation Engine_ makes available to us. The CloudForms/ManageIQ Web User Interface (WebUI) allows us to access the Automate functionality via the *Automate* top-level menu (see <<i1>>).
 
 [[i1]]
-.Automate top-tevel menu for CloudForms 4.1
+.Automate top-tevel menu for CloudForms 4.2
 image::images/ss1.png[screenshot,270,align="center"]
 {zwsp} +
 
@@ -14,7 +14,7 @@ The first menu item that we see takes us to the _Explorer_. This is our visual i
 
 [[i2]]
 .Automate Explorer
-image::images/ss2.png[screenshot,450,align="center"]
+image::images/ss2.png[screenshot,550,align="center"]
 {zwsp} +
 
 Before we start our journey into learning CloudForms/ManageIQ Automate, we'll take a tour of the Automate Datastore to familiarise ourselves with the objects that we'll find there.
@@ -32,7 +32,7 @@ We can look at each of these types of object in more detail.
 
 === Domains
 
-A _domain_ is a collection of namespaces, classes, instances and methods. The ManageIQ project provides a single _ManageIQ_ domain for all supplied automation code, whilst Red Hat adds the supplemental _RedHat_ domain containing added-value code for the CloudForms product. The ManageIQ and RedHat domains are locked, indicating their read-only nature, however we can create new domains for our own custom automation code. <<i2>> shows the default domains, and an additional two custom domains: _Bit63_ and _ACME_. 
+A _domain_ is a collection of namespaces, classes, instances and methods. The ManageIQ project provides a single _ManageIQ_ domain for all supplied automation code, whilst Red Hat adds the supplemental _RedHat_ domain containing added-value code for the CloudForms product. The ManageIQ and RedHat domains are locked, indicating their read-only nature, however we can create new domains for our own custom automation code. <<i2>> shows the default domains, two additional manually-created domains: _Bit63_ and _Debug_, and a Git-imported domain _Investigative_Debugging_. 
 
 Organising our own code into custom domains greatly simplifies the task of exporting and importing code (simplifying code portability and reuse). It also leaves Red Hat or the ManageIQ project free to update the locked domain through minor releases without fear of overwriting our customisations.
 
@@ -56,6 +56,17 @@ We can export domains using _rake_ from the command line, and import them either
 bin/rake evm:automate:import YAML_FILE=bit63.yaml IMPORT_AS=Bit63 SYSTEM=false \
 ENABLED=true DOMAIN=Export PREVIEW=false
 ....
+
+===== Importing Domains from a Git Repository
+
+CloudForms 4.2/ManageIQ _Euwe_ has introduced the capability to be able to import domains directly from a git repository. We can specify the repository URL and optional credentials at the Import / Export menu, whereupon the repository contents is downloaded to the appliance with the _Git Repositories Owner_ server role set. We can then choose to import from a repository branch or tag (see <<i5>>). 
+
+[[i5]]
+.Selecting a branch or tag to import
+image::images/ss12.png[screenshot,400,align="center"]
+{zwsp} +
+
+A domain imported from a git repository has a github icon (see <<i2>>), and will be locked. The recommended way of updating code in such a domain is to commit and push an update to the git repository as a new tag or branch, and then update the domain using the *Configuration -> Refresh with a new branch or tag* menu.
 
 ==== Copying Objects Between Domains
 
@@ -126,6 +137,10 @@ Each field type has an associated *Data Type* which is also selectable from a dr
 .Schema field data type
 image::images/ss9.png[screenshot,500,align="center"]
 {zwsp} +
+
+CloudForms 4.2/ManageIQ _Euwe_ has introduced several new data types: _Null Coalescing_, _Host_, _Vm_, _Storage_, _Ems_, _Policy_, _Server_, _Request_, _Provision_ and _User_. These will be discussed in a later chapter.
+
+===== Default Values
 
 We can define default values for fields in a class schema. These will be inherited by all instances created from the class, but can be optionally overridden in the schema of any particular instance.
 

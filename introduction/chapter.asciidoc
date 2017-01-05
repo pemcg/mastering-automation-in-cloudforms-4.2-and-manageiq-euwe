@@ -7,7 +7,7 @@ Welcome to this guide to mastering the Automate feature of both CloudForms and M
 
 CloudForms and ManageIQ are both _cloud management platforms_, that are also rather good at managing traditional server virtualization products such as VMware vSphere or oVirt. This broad capability makes them ideal as _hybrid_ cloud managers, able to manage both public clouds, and on-premise private clouds and virtual infrastructures. They provides a single management interface into a hybrid environment, enabling cross-platform orchestration to be achieved with relative simplicity.
 
-Although ManageIQ was originally designed as a virtualization and _Infrastructure as a Service_ (IaaS) cloud manager, CloudForms 4.0/ManageIQ _Capablanca_ introduced support for Docker Container management, including Red Hat's OpenShift Enterprise 3.x _Platform as a Service_ (PaaS) cloud solution.
+Although ManageIQ was originally designed as a virtualization and _Infrastructure as a Service_ (IaaS) cloud manager, CloudForms 4.0/ManageIQ _Capablanca_ introduced support for Docker Container management, including Red Hat's OpenShift Enterprise 3.x _Platform as a Service_ (PaaS) cloud solution. With CloudForms 4.2/ManageIQ _Euwe_ this capability has been extended to manage cloud-oriented software-defined networking and storage, as well as configuration management and middleware components within our enterprise.
 
 '''
 .Requirements of a Cloud Management Platform
@@ -27,29 +27,35 @@ Cloud management platforms (CMPs) are software tools that allow for the integrat
 
 CloudForms and ManageIQ manage each cloud, container or virtual environment using modular subcomponents called _providers_. Each provider contains the functionality required to connect to and monitor its specific target platform, and this provider specialization enables common cloud management functionality to be abstracted into the core product. In keeping with the _manager of managers_ concept, providers communicate with their respective underlying cloud or infrastructure platform using the native APIs published for the platform manager (such as VMware vCenter Server using the vSphere SOAP API).
 
-The pluggable nature of the provider architecture makes it relatively straightforward  to develop new providers to support additional cloud and infrastructure platforms. For example the _Botvinnik_, _Capablanca_ and _Darga_ versions of ManageIQ have between them added eight new providers, with more currently under development.
-
-Providers are broadly divided into categories, and as of CloudForms 4.1/ManageIQ _Darga_ these are _Cloud_, _Infrastructure_, _Configuration Management_, _Networking_ and _Container_.
+The pluggable nature of the provider architecture makes it relatively straightforward  to develop new providers to support additional cloud and infrastructure platforms. Providers are broadly divided into categories, and in CloudForms 4.2/ManageIQ _Euwe_ these are _Cloud_, _Infrastructure_, _Container_, _Configuration Management_, _Network_, _Middleware_ and _Storage_.
 
 ==== Cloud Providers
 
-Cloud providers enable us to manage three _public_ clouds; Amazon Web Services, Google Compute Engine, and Microsoft Azure. There is also a cloud provider that can connect to and manage a _private_ or _on-premise_ Red Hat OpenStack Platform (OSP) cloud (this is the _OverCloud_ in the case that OSP is managed by the Red Hat OpenStack Platform Director).
+Cloud providers in both CloudForms 4.2 and ManageIQ _Euwe_ enable us to manage three _public_ clouds; Amazon EC2, Google Compute Engine, and Microsoft Azure. There is also a cloud provider that can connect to and manage a _private_ or _on-premise_ Red Hat OpenStack Platform (OSP) cloud (this is the _OverCloud_ in the case that OSP is managed by the Red Hat OpenStack Platform Director). ManageIQ _Euwe_ also has the capability to add VMware vCloud as a manageable cloud provider.
 
 ==== Infrastructure Providers
 
-Infrastructure providers enable us to manage three traditional infrastructure products: VMware vCenter Server, Red Hat Enterprise Virtualization Manager, and Microsoft System Center Virtual Machine Manager. There is also an infrastructure provider that can connect to and manage a private or on-premise Red Hat OpenStack Platform Director _UnderCloud_.
+Infrastructure providers enable us to manage three traditional infrastructure products: VMware vCenter Server, Red Hat (Enterprise) Virtualization Manager, and Microsoft System Center Virtual Machine Manager. There is also an infrastructure provider that can connect to and manage a private or on-premise Red Hat OpenStack Platform Director _UnderCloud_.
+
+==== Container Providers
+
+Container providers allow us to connect to and manage Docker container managers. CloudForms 4.2 supports OpenShift Container Platform as a container manager, but ManageIQ _Euwe_ also adds   Kubernetes and OpenShift Origin as available managers.
 
 ==== Configuration Management Providers
 
 Configuration management providers enable us to use the capabilities of Red Hat Satellite (or Foreman), and Ansible Tower for configuration management. The Satellite provider enables us to use Foreman _host groups_, and extends the provisioning capability to include _bare-metal_ (i.e. non-virtual) servers. The Ansible Tower provider allows us to run Ansible jobs as part of an Automate workflow.
 
-==== Networking Providers
+==== Network Providers
 
-CloudForms 4.1 and ManageIQ _Darga_ ship with a networking provider for OpenStack Neutron. This is automatically configured if we add an OpenStack cloud provider.
+Network providers allow us to visualize and manage the software-defined network components in our Amazon EC2, Google Compute Engine, Microsoft Azure, or OpenStack clouds. Network providers are automatically configured when we add any of the public or private cloud providers, or OSP Director infrastructure provider.
 
-==== Container Providers
+==== Storage Providers
 
-CloudForms 4.1 and ManageIQ _Darga_ ship with container providers that can connect to and manage three Docker container managers; Atomic, Kubernetes and OpenShift.
+Storage providers allow us to manage the software-defined storage components in our OpenStack cloud. CloudForms 4.2/ManageIQ _Euwe_ has introduced support for the OpenStack Cinder (block) and Swift (object) storage modules.
+
+==== Middleware Providers
+
+CloudForms 4.2/ManageIQ _Euwe_ has introduced a new Middleware provider type as a technology preview. This provides inventory, metrics and events for JBoss application servers and EAP databases, by connecting to a suitably configured Hawkular instance. 
 
 ==== Mixing and Matching Providers
 
@@ -57,13 +63,13 @@ When deploying CloudForms or ManageIQ in our enterprise we often connect to seve
 
 ===== Company XYZ Inc.
 
-Our example organization has an established VMware vSphere 5.5 virtual environment, containing many hundreds of virtual machines. This virtual infrastructure is typically used for the stable, long-lived virtual machines, and many of the organisation's critical database, directory services and file servers are situated here. Approximately half of the VMware virtual machines run Red Hat Enterprise Linux footnote:[CloudForms and ManageIQ are virtual machine operating system neutral; they can manage Windows, Red Hat, Fedora, Debian, Ubuntu or SUSE VMs (or their derivatives) with equal ease], and to facilitate the patching, updating, and configuration management of these VMs, the organization has a Satellite 6 server.
+Our example organization has an established VMware vSphere 6.0 virtual environment, containing many hundreds of virtual machines. This virtual infrastructure is typically used for the stable, long-lived virtual machines, and many of the organisation's critical database, directory services and file servers are situated here. Approximately half of the VMware virtual machines run Red Hat Enterprise Linux footnote:[CloudForms and ManageIQ are virtual machine operating system neutral; they can manage Windows, Red Hat, Fedora, Debian, Ubuntu or SUSE VMs (or their derivatives) with equal ease], and to facilitate the patching, updating, and configuration management of these VMs, the organization has a Satellite 6 server.
 
 Company XYZ is a large producer of several varieties of widget, and the widget development test cycle involves creating many short-lived instances in an OpenStack private cloud, to cycle through the test suites. The developers like to have a service catalog from which they can order one of the many widget test environments, and at any time there may be several hundred instances running various test configurations.
 
-The web developers in the company are in the process of re-developing the main Internet web portal as a scalable public cloud workload hosted in Amazon Web Services (AWS). The web portal provides a rich product catalog, online documentation, knowlegebase and ecommerce shopping area to customers.
+The web developers in the company are in the process of re-developing the main Internet web portal as a scalable public cloud workload hosted in Amazon EC2. The web portal provides a rich product catalog, online documentation, knowlegebase and ecommerce shopping area to customers.
 
-This organization uses CloudForms to manage the workflows that provision virtual machines into the vSphere virtual infrastructure, Amazon Web Services, and OpenStack. The users have a self-service catalog to provision individual virtual machine workloads into either VMware or Amazon, or entire test suites into OpenStack. CloudForms orchestration workflows help with the maintenance of an _image factory_ that keeps virtual machine images updated and published as VMware templates, Amazon Machine Images (AMIs) and OpenStack _Glance_ images.
+This organization uses CloudForms to manage the workflows that provision virtual machines into the vSphere virtual infrastructure, Amazon EC2, and OpenStack. The users have a self-service catalog to provision individual virtual machine workloads into either VMware or Amazon, or entire test suites into OpenStack. CloudForms orchestration workflows help with the maintenance of an _image factory_ that keeps virtual machine images updated and published as VMware templates, Amazon Machine Images (AMIs) and OpenStack _Glance_ images.
 
 As part of the provisoning process CloudForms also manages the integration workflows that allow newly provisoned virtual machines to be automatically registered with the Satellite 6 server, and an in-house configuration management database. This ensures that newly provisioned virtual machines are configured by Puppet according to server role, patched with the latest updates, with a full inventory visible to the help-desk system.
 
@@ -124,7 +130,7 @@ Typical integration actions might be to extend the virtual machine provisioning 
 
 === The Appliance
 
-To simplify installation, both CloudForms are ManageIQ are distributed as fully installed virtual machine templates, often just referred to as _Appliances_ for convenience. An appliance comes pre-configured with everything we need. A CloudForms 4.2 appliance runs RHEL 7.2 (CentOS 7.2 in the case of ManageIQ), with PostgreSQL 9.4, Rails 5.0, the CloudForms/ManageIQ application, and all associated Ruby gems installed. Appliances are downloadable as a virtual machine image template in formats suitable for VMware, Red Hat Enterprise Virtualization, OpenStack, Microsoft's System Center Virtual Machine Manager or Azure cloud, and Google Compute Engine. They are also available as a Docker container image.
+To simplify installation, both CloudForms are ManageIQ are distributed as fully installed virtual machine templates, often just referred to as _Appliances_ for convenience. An appliance comes pre-configured with everything we need. A CloudForms 4.2 appliance runs RHEL 7.3 (CentOS 7.3 in the case of ManageIQ (Euwe_)), with PostgreSQL 9.5, Rails 5.0.0.1, the CloudForms/ManageIQ application, and all associated Ruby gems installed. Appliances are downloadable as a virtual machine image template in formats suitable for VMware, Red Hat Enterprise Virtualization, OpenStack, Amazon EC2, Microsoft's System Center Virtual Machine Manager or Azure cloud, and Google Compute Engine. They are also available as a Docker container image.
 
 ==== Ruby and Rails
 
