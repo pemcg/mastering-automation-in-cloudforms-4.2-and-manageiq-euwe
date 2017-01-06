@@ -79,53 +79,51 @@ The method exits with `$evm.root['ae_result']` set to 'error', 'retry' or 'ok' a
 
 We can easily run an Ansible Tower job template on any virtual machine from an Automate method. 
 
-In this example we'll run a job template called 'Install Single Package' on a VM called 'testserver02'. We'll pass to the job template the extra variable 'package_name' with the value 'screen'. For the example use-case the code snippet is not running as part of a provisioning operation, nor called from a button on the VM in the WebUI. It therefore must load the VM object into `$evm.root['vm']` itself. 
+In this example we'll run a job template called 'Install Single Package' on a VM called 'testserver'. We'll pass to the job template the extra variable 'package_name' with the value 'screen'. To prevent a long-running Ansible playbook from timing out our currently running method, we'll launch the AnsibleTower state machine as a new automation request, rather than using `$evm.instantiate`. As the new method will not running as part of a provisioning operation, nor called from a button on the VM in the WebUI, we must ensure that the VM object is loaded into `$evm.root['vm']` at runtime. We do this by passing a "Vm:vm" argument containing the VM object ID that we wish to load, as shown in the following code:
 
 [source,ruby]
 ----
-PATH = '/ConfigurationManagement/AnsibleTower/Operations/StateMachines/Job/default'.freeze
-SCRIPT_CLASS = 'ManageIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript'.freeze
+ANSIBLE_NAMESPACE = 'ConfigurationManagement/AnsibleTower/Operations/StateMachines'.freeze
+ANSIBLE_STATE_MACHINE_CLASS = 'Job'.freeze
+ANSIBLE_STATE_MACHINE_INSTANCE = 'default'.freeze
 VM_CLASS = 'VmOrTemplate'.freeze
+attrs = {}
+attrs['job_template_name'] = 'Install Single Package'
+attrs['dialog_param_package_name'] = 'screen'
 #
-# Lookup the job template object and attach as $evm.object['job_template']
+# Passing an attribute of Vm::vm=id ensures that the executed method will
+# have $evm.root['vm'] pre-loaded with the VM with this ID
 #
-$evm.object['job_template'] = $evm.vmdb(SCRIPT_CLASS).find_by_name('Install Single Package')
+vm = $evm.vmdb(VM_CLASS).find_by_name('testserver')
+attrs['Vm::vm'] = vm.id
 #
-# Lookup the VM object and attach as $evm.root['vm']
+# make sure the VM is started
 #
-$evm.root['vm'] = $evm.vmdb(VM_CLASS).find_by_name('testserver02')
+vm.start if vm.power_state != 'on'
 #
-# Power on the VM of it's not already on
+# Call the job template as a new automation request in case it runs for
+# longer than 10 minutes
 #
-$evm.root['vm'].start if $evm.root['vm'].power_state != 'on'
-#
-# Define our URI to call the state machine, including the extra_var as an argument
-#
-uri = "#{PATH}?param1=package_name%3Dscreen"
-#
-# Call the state machine
-#
-$evm.instantiate(uri)
+options = {}
+options[:namespace]     = ANSIBLE_NAMESPACE
+options[:class_name]    = ANSIBLE_STATE_MACHINE_CLASS
+options[:instance_name] = ANSIBLE_STATE_MACHINE_INSTANCE
+options[:user_id]       = $evm.root['user'].id
+options[:attrs]         = attrs
+auto_approve            = true
+$evm.execute('create_automation_request', options, $evm.root['user'].userid, auto_approve)
 ----
 
-Rather than looking up the `SCRIPT_CLASS` object and attaching that to `$evm.object['job_template']`, we could have passed the job template name as an argument in the URI, for example:
-
-[source,ruby]
-----
-uri = "#{PATH}?job_template_name=Install%20Single%20Package&param1=package_name%3Dscreen"
-----
-
-Using the alternative syntax for argument passing, we could re-write this as follows: 
+Rather than passing the attribute 'job_template_name', we could if we wish pass 'job_template_id'. For example we may have been passed the template ID from a service dialog, or we may have multiple Ansible Tower providers with duplicate job template names, and wish to identify the correct template. The following code shows how we would lookup and specify the job template ID for a job template on a particular provider (in this case the provider has the ID of 4):
 
 [source,ruby]
 ----
-uri = "#{PATH}?job_template_name=Install%20Single%20Package&dialog_param_package_name=screen"
+SCRIPT_CLASS = 'ManageIQ_Providers_AnsibleTower_ConfigurationManager_ConfigurationScript'.freeze
+job_template =  $evm.vmdb(SCRIPT_CLASS).where(
+                ["manager_id = ? AND name = ?", 4, 'Install Single Package']
+                ).first
+attrs['job_template_id'] = job_template.id
 ----
-
-[NOTE]
-====
-If our URI contains reserved or unsafe characters, we must URL-encode them. In these examples we have replaced ' ' with '%20' and '=' with '%3D'
-====
 
 ==== Calling the State Machine from an Instance
 

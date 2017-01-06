@@ -39,7 +39,7 @@ Infrastructure providers enable us to manage three traditional infrastructure pr
 
 ==== Container Providers
 
-Container providers allow us to connect to and manage Docker container managers. CloudForms 4.2 supports OpenShift Container Platform as a container manager, but ManageIQ _Euwe_ also adds   Kubernetes and OpenShift Origin as available managers.
+Container providers allow us to connect to and manage Docker container managers. CloudForms 4.2 supports OpenShift Container Platform as a container manager, but ManageIQ _Euwe_ also adds Kubernetes and OpenShift Origin as available managers.
 
 ==== Configuration Management Providers
 
@@ -126,7 +126,7 @@ We can create self-service catalogs to permit users to order our orchestration w
 
 As an extension of its Automate capability, CloudForms and ManageIQ are able to connect to and _Integrate_ with many Enterprise tools and systems. Both systems come with Ruby Gems to enable automation scripts to connect to both RESTful and SOAP APIs, as well as libraries to connect to several SQL and LDAP databases, and the ability to run remote PowerShell scripts on Windows servers.
 
-Typical integration actions might be to extend the virtual machine provisioning workflow to retrieve and use an IP address from a corporate IP address management (IPAM) solution; to create a new cconfiguration item (CI) record in the central configuration management database (CMDB), or to create and update tickets in the enterprise Service Management tool, such as ServiceNow.
+Typical integration actions might be to extend the virtual machine provisioning workflow to retrieve and use an IP address from a corporate IP address management (IPAM) solution; to create a new configuration item (CI) record in the central configuration management database (CMDB), or to create and update tickets in the enterprise Service Management tool, such as ServiceNow.
 
 === The Appliance
 
@@ -134,7 +134,7 @@ To simplify installation, both CloudForms are ManageIQ are distributed as fully 
 
 ==== Ruby and Rails
 
-The core "evmserverd" application is witten in Ruby on Rails, and uses PostgreSQL as its database. When we use the Automate capability of CloudForms or ManageIQ we work extensively with the Ruby language, and write scripts that interact with a Ruby object model defined for us by the Automation Engine. We certainly don't need to be Rails developers however (we don't really _need_ to know anything about Rails), but as we'll see in <<peeping-under-the-hood>>, some understanding of Rails concepts can make it easier to understand the object model, and what happens behind the scenes when we run our scripts.
+The core "evmserverd" application is witten in Ruby on Rails, and uses PostgreSQL as its database. When we use the Automate capability of CloudForms or ManageIQ we work extensively with the Ruby language, and write scripts that interact with a Ruby object model defined for us by the Automation Engine. We certainly don't need to be Rails developers however (we don't really _need_ to know anything about Rails), but as we'll see in link:../../peeping_under_the_hood/chapter.asciidoc[Peeping Under the Hood], some understanding of Rails concepts can make it easier to understand the object model, and what happens behind the scenes when we run our scripts.
 
 [NOTE]
 Why Rails? Ruby on Rails is a powerful development framework for database-centric web-based applications. It is popular for open source product development, for example _Foreman_, one of the core components of Red Hat's _Satellite 6.x_ product, is also a Rails application.
@@ -145,7 +145,7 @@ Red Hat is an open source company, and its _products_ are derived from one or mo
 
 ==== ManageIQ (the _Project_)
 
-The ManageIQ project releases a new version every six months (approximately). Each version is named alphabetically after a chess Grand Master, and so far these have been Anand, Botvinnik, Capablanca, and Darga. At the time of writing, Darga is the current stable release, and Euwe is in development.
+The ManageIQ project releases a new version every six months (approximately). Each version is named alphabetically after a chess Grand Master, and so far these have been Anand, Botvinnik, Capablanca, Darga and Euwe. At the time of writing, Euwe is the current stable release, and Fine is in development.
 
 ==== Red Hat CloudForms (the _Product_)
 
@@ -169,7 +169,7 @@ _CloudForms Management Engine_ is the name of the CloudForms virtual appliance t
 |Botvinnik|13 - 22|5.4|3.2
 |Capablanca|23 - 33|5.5|4.0
 |Darga|34 - 42|5.6|4.1
-|Euwe| 43 -|5.7|4.2
+|Euwe| 43 - 51|5.7|4.2
 |=======
 
 === Summary

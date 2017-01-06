@@ -50,7 +50,7 @@ $evm.root['instance'] = object_walker   (type: String)
 
 As we saw, `$evm.root` returns to us the object representing the instance that was launched when we entered Automate. Many instances have schemas that contain relationships to other instances, and as each relationship is followed, a new child object is created under the calling object to represent the called instance. These objects all live in the same workspace, they share the same `$evm` variable. Fortunately we can access any of the objects in this parent-child hierarchy using `$evm.object`.
 
-Calling `$evm.object` with no arguments returns the currently instantiated/running instance. As automation scripters we can think of this as "our currently running code", and we can access it using the alias `$evm.current`. When we wanted to access our schema variable __username__, we accessed it using `$evm.object['username']`.
+Calling `$evm.object` with no arguments returns the currently instantiated/running instance. As automation scripters we can think of this as "our currently running code", and we can also access it using the alias `$evm.current`. When we wanted to access our 'username' schema variable in link:../using_schema_variables/chapter.asciidoc[Using Schema Variables], we accessed it using `$evm.object['username']`.
 
 We can access our parent object (the one that called us) using `$evm.object("..")`, or the alias `$evm.parent`.
 
@@ -195,7 +195,7 @@ We can use `$evm.instantiate` to launch another Automate instance programmatical
 
 [source,ruby]
 ----
-$evm.instantiate('/Discovery/Methods/ObjectWalker')
+$evm.instantiate('/Discovery/ObjectWalker/object_walker')
 ----
 
 Instances called in this way execute synchronously, so the calling method waits for completion before continuing. The called instance also appears as a child object of the caller (it sees the caller as its `$evm.parent`).
