@@ -130,7 +130,7 @@ Typical integration actions might be to extend the virtual machine provisioning 
 
 === The Appliance
 
-To simplify installation, both CloudForms are ManageIQ are distributed as fully installed virtual machine templates, often just referred to as _Appliances_ for convenience. An appliance comes pre-configured with everything we need. A CloudForms 4.2 appliance runs RHEL 7.3 (CentOS 7.3 in the case of ManageIQ (Euwe_)), with PostgreSQL 9.5, Rails 5.0.0.1, the CloudForms/ManageIQ application, and all associated Ruby gems installed. Appliances are downloadable as a virtual machine image template in formats suitable for VMware, Red Hat Enterprise Virtualization, OpenStack, Amazon EC2, Microsoft's System Center Virtual Machine Manager or Azure cloud, and Google Compute Engine. They are also available as a Docker container image.
+To simplify installation, both CloudForms are ManageIQ are distributed as fully installed virtual machine templates, often just referred to as _Appliances_ for convenience. An appliance comes pre-configured with everything we need. A CloudForms 4.2 appliance runs RHEL 7.3 (CentOS 7.3 in the case of ManageIQ _Euwe_), with PostgreSQL 9.5, Rails 5.0.0.1, the CloudForms/ManageIQ application, and all associated Ruby gems installed. Appliances are downloadable as a virtual machine image template in formats suitable for VMware, Red Hat Enterprise Virtualization, OpenStack, Amazon EC2, Microsoft's System Center Virtual Machine Manager or Azure cloud, and Google Compute Engine. They are also available as a Docker container image.
 
 ==== Ruby and Rails
 
