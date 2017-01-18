@@ -54,7 +54,7 @@
   * [Virtual Machine and Instance Retirement](vm_instance_retirement/chapter.asciidoc)
   * [Service Retirement](service_retirement/chapter.asciidoc)
 * [Part 6](part6.asciidoc)
-  * [Calling Automation Using the RESTful API](calling_automation_from_the_restful_api/chapter.asciidoc)
+  * [Calling Automation Using the RESTful API](calling_automation_using_the_restful_api/chapter.asciidoc)
   * [Automation Request Approval](automation_request_approval/chapter.asciidoc)
   * [Calling External Services](calling_external_services/chapter.asciidoc)
 * [Part 7](part7.asciidoc)
