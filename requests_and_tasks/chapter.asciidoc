@@ -13,9 +13,9 @@ Some relatively simple automation operations result in the Automate instance bei
 * Automate instances entered as a result of a control policy action type of *Invoke a Custom Automation*
 * Alerts that send a *Management Event*
 
-The automation scripts that we've developed so far fall into ths first category.
+The automation scripts that we've developed so far fall into this first category.
 
-Other more complex automation operations - such as provisioning virtual machines or cloud instances - may alter or consume resources in our virtual or cloud infrastructure. For this type of operation, ManageIQ allows us to insert an approval stage into the Automate workflow. It does this by separating the operation into two distinct stages - the _request_ and the _task_, with an administrative approval being required to progress from one to the other.
+Other more complex automation operations - such as provisioning virtual machines or cloud instances - may alter or consume resources in our virtual or cloud infrastructure. For this type of operation, both CloudForms and ManageIQ allow us to insert an approval stage into the Automate workflow. It does this by separating the operation into two distinct stages - the _request_ and the _task_, with an administrative approval being required to progress from one to the other.
 
 Examples of these are:
 

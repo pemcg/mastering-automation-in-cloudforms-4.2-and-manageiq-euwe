@@ -136,7 +136,7 @@ _add_disk_ defines its own method `call_rhev` that handles the REST communicatio
 
 In the main section of code we account for the fact that we're allowing _add_disk_ to be callable in either of two ways: from a button on a virtual machine in the WebUI, or as part of the VM provision workflow. (see link:../ways_of_entering_automate/chapter.asciidoc[Ways of Entering Automate]). We first need to find out how _add_disk_ has been called, and retrieve the virtual machine service model object accordingly. 
 
-We also need to determine the new disk size. If _add_disk_ has been called from a button, the new disk dize will have been passed as a service dialog element. If it's called as part of a VM provisioning operation we'll hardcode this as the NEW_DISK_SIZE constant (for this example it's 30GB):
+We also need to determine the new disk size. If _add_disk_ has been called from a button, the new disk size will have been passed as a service dialog element. If it's called as part of a VM provisioning operation we'll hardcode this as the NEW_DISK_SIZE constant (for this example it's 30GB):
 
 [source,ruby]
 ----

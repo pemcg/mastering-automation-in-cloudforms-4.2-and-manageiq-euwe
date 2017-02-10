@@ -97,7 +97,7 @@ vm.custom_set(key, value)
 exit MIQ_OK
 ----
 
-We create a new method in our _Methods_ class as we did before, and call it __add_custom_attribute__. We paste the code into the *Data* box, click *Validate*, then *Save*.
+We create a new method in our _Methods_ class as we did before, and call it __add_custom_attribute__. We paste the code into the *Data* box, click *Validate*, then *Add*.
 
 ==== Create the /System Entry Point
 
