@@ -20,8 +20,7 @@ We've discussed the provision request object in detail already. It is the object
 
 ==== Request Context
 
-When working at the request stage of the provisioning process (i.e., prior to appro‐
-val), we can access the provision request object directly from our workspace:
+When working at the request stage of the provisioning process (i.e., prior to approval), we can access the provision request object directly from our workspace:
 
 [source,ruby]
 ----

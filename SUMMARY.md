@@ -1,7 +1,7 @@
 # Summary
 
 * [Introduction](README.md)
-  * [Preface](preface.asciidoc.wip)
+  * [Preface](preface.asciidoc)
 * [Part 1](part1.asciidoc)
   * [Introduction to CloudForms and ManageIQ](introduction/chapter.asciidoc)
   * [Introduction to the Automate Datastore](introduction_to_the_automate_datastore/chapter.asciidoc)

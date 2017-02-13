@@ -87,16 +87,18 @@ begin
   # Find out this VM's server_role tag
   #
   our_server_role = vm.tags(:server_role).first
-  $evm.log(:info, "VM #{vm.name} has a server_role tag of: #{our_server_role}")
-  #
-  # Loop through the other VMs on the same host
-  #
-  vm.host.vms.each do |this_vm|
-    next if this_vm.name == vm.name  # Skip if this VM == our VM
-    if this_vm.tags(:server_role).first == our_server_role
-      $evm.log(:info, "VM #{this_vm.name} also has a server_role tag of: #{our_server_role}, taking remedial action")
-      new_host = relocate_vm(vm)
-      send_email('EvmGroup-administrator', vm.name, new_host)
+  unless our_server_role.blank?
+    $evm.log(:info, "VM #{vm.name} has a server_role tag of: #{our_server_role}")
+    #
+    # Loop through the other VMs on the same host
+    #
+    vm.host.vms.each do |this_vm|
+      next if this_vm.name == vm.name  # Skip if this VM == our VM
+      if this_vm.tags(:server_role).first == our_server_role
+        $evm.log(:info, "VM #{this_vm.name} also has a server_role tag of: #{our_server_role}, taking remedial action")
+        new_host = relocate_vm(vm)
+        send_email('EvmGroup-administrator', vm.name, new_host)
+      end
     end
   end
   exit MIQ_OK
