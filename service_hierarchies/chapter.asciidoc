@@ -136,7 +136,7 @@ image::images/ss10.png[Screenshot,600,align="center"]
 
 ===== Dialog element method
 
-The dynamic drop-down element in the service dialog calls a method called _list_services_. We only wish to display a service in the drop-down list if the user has permissions to see it via their tenant membership and role-based access control (RBAC) filter. We define three methods; `get_visible_tenant_ids` to get our tenant and any child tenant IDs; `get_current_group_rbac_array` to retrieve a user's RBAC filter array, and `service_visible?` to check that a service has a tag that matches the filter. The code for CloudForms 4.1/ManageIQ _Darga_ is as follows:
+The dynamic drop-down element in the service dialog calls a method called _list_services_. We only wish to display a service in the drop-down list if the user has permissions to see it via their tenant membership and role-based access control (RBAC) filter. We define three methods; `get_visible_tenant_ids` to get our tenant and any child tenant IDs; `get_current_group_rbac_array` to retrieve a user's RBAC filter array, and `service_visible?` to check that a service has a tag that matches the filter. The code is as follows:
 
 [source,ruby]
 ----
@@ -183,14 +183,6 @@ def service_visible?(visible_tenants, rbac_array, service)
   end
   visible
 end
-----
-
-The method of implementing RBAC filters changed slightly with CloudForms 4.2/ManageIQ _Euwe_. For this release and later we must change the __get_current_group_rbac_array__ to the following code:
-
-[source,ruby]
-----
-#
-# Code to be included once tested
 ----
 
 When we enumerate the services, we check on visibility to the user before adding to the drop-down list:
