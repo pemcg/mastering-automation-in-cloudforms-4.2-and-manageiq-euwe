@@ -156,8 +156,7 @@ tenant_found = false
 tenant_name = $evm.root['dialog_tenant_name']
 unless tenant_name.length.zero?
   lowercase_tenant = tenant_name.gsub(/\W/,'_').downcase
-  tenant_objects = $evm.vmdb('CloudTenant').find(:all)
-  tenant_objects.each do | tenant |
+  $evm.vmdb('CloudTenant').all.each do | tenant |
     if tenant.name.downcase == lowercase_tenant
       tenant_found = true
       display_string += "   Tenant \'#{tenant.name}\' exists in OpenStack " 
