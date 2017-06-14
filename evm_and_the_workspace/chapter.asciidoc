@@ -70,7 +70,7 @@ This would have resulted in an object hierarchy (when viewed from the _hello_wor
 
 === $evm.vmdb
 
-`$evm.vmdb` is a useful method that can be used to retrieve any _service model_ object (see link:../service_models/chapter.asciidoc[Service Models]). The method can be called with one or two arguments. 
+`$evm.vmdb` is a useful method that can be used to retrieve any _service model_ object (see link:../peeping_under_the_hood/chapter.asciidoc[Peeping Under the Hood]). The method can be called with one or two arguments. 
 
 ==== Single Argument Form
 
