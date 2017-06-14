@@ -11,7 +11,7 @@ The Automate method should be run from a button visible on the VM details page. 
 
 === Solution
 
-We can achieve the task in the following way (the entire script is link:scripts/enforce_anti_affinity.rb[here]). We'll define two methods internally within our Ruby script, `relocate_vm` and `send_email`. Our main code will be a simple iteration loop.
+We can achieve the task in the following way (the entire script is link:https://github.com/pemcg/mastering-automation-in-cloudforms-4.2-and-manageiq-euwe/tree/master/enforcing_anti_affinity_rules/scripts[here]). We'll define two methods internally within our Ruby script, `relocate_vm` and `send_email`. Our main code will be a simple iteration loop.
 
 ==== relocate_vm
 

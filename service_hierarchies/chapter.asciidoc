@@ -268,7 +268,7 @@ rescue => err
 end
 ----
 
-The scripts in this chapter are available link:scripts[here]
+The scripts in this chapter are available link:https://github.com/pemcg/mastering-automation-in-cloudforms-4.2-and-manageiq-euwe/tree/master/service_hierarchies/scripts[here]
 
 ===== Putting it all together
 
