@@ -143,7 +143,7 @@ The behaviour of this parameter is as follows:
 
 === run_via_api
 
-The accompanying code https://github.com/pemcg/mastering-automation-in-cloudforms-and-manageiq/blob/4.1/darga/scripts/chapter42/scripts[here] contains an example script called _run_via_api.rb_ that can be used to call any Automate instance, using arguments to pass server name, credentials, and URI parameters to the instance to be called. Its usage is as follows:
+The accompanying code https://github.com/pemcg/mastering-automation-in-cloudforms-4.2-and-manageiq-euwe/tree/master/calling_automation_using_the_restful_api/scripts[here] contains an example script called _run_via_api.rb_ that can be used to call any Automate instance, using arguments to pass server name, credentials, and URI parameters to the instance to be called. Its usage is as follows:
 
 ----
 Usage: run_via_api.rb [options]
