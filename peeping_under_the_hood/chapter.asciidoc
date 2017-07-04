@@ -20,7 +20,7 @@ The Ruby scripts that we write are just plain Ruby 2.x, although the Active Supp
 [NOTE]
 The Active Support extensions can make our lives easier. For example rather than adding math to our automation script to work out the number of seconds in a two-month time span (perhaps to specify a VM retirement period), we can just specify `2.months`.
 
-Our automation scripts access Ruby objects, made available to us by the Automation Engine via the `$evm` variable (`$evm` is described in more detail in <<evm-and-the-workspace>>). Behind the scenes these are Rails objects, which is why having some understanding of Rails can help our investigation into how we can use these objects to our maximum benefit.
+Our automation scripts access Ruby objects, made available to us by the Automation Engine via the `$evm` variable (`$evm` is described in more detail in link:../evm_and_the_workspace/chapter.asciidoc[$evm and the Workspace]). Behind the scenes these are Rails objects, which is why having some understanding of Rails can help our investigation into how we can use these objects to our maximum benefit.
 
 ==== Model-View-Controller
 
