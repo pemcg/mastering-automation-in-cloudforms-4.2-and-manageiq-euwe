@@ -73,14 +73,14 @@ The method is called in a loop, passing an IP address into the +body_hash+ argum
 
 The _fog_ gem is a multipurpose cloud services library that supports connectivity to a number of cloud providers.
 
-The follow code uses the fog gem to retrieve OpenStack networks from Neutron, and present them as a dynamic drop-down dialog list. The code filters networks that match a tenant's name, and assumes that the ManageIQ user has a +tenant+ tag containing the same name:
+The follow code uses the fog gem to retrieve OpenStack networks from Neutron, and present them as a dynamic drop-down dialog list. The code filters networks that match a tenant's name, and assumes that the CloudForms/ManageIQ user's group has a +tenant+ tag containing the same name:
 
 [source,ruby]
 ----
-require 'fog'
+require 'fog/openstack'
 begin
-  tenant_name = $evm.root['user'].current_group.tags(:tenant).first
-  $evm.log(:info, "Tenant name: #{tenant_name}")
+  tenant = $evm.root['user'].current_group.tags(:tenant).first
+  $evm.log(:info, "Tenant name: #{tenant}")
   
   dialog_field = $evm.object
   dialog_field["sort_by"] = "value"
@@ -90,20 +90,20 @@ begin
   ems = $evm.vmdb('ems').find_by_name("OpenStack DC01")
   raise "ems not found" if ems.nil?
   
-  neutron_service = Fog::Network.new({
-    :provider => 'OpenStack',
-    :openstack_api_key => ems.authentication_password,
+  neutron_service =  Fog::Network::OpenStack.new({
+    :openstack_api_key  => ems.authentication_password,
     :openstack_username => ems.authentication_userid,
-    :openstack_auth_url => "http://#{ems.hostname}:35357/v2.0/tokens",
-    :openstack_tenant => tenant_name
+    :openstack_auth_url => "https://#{ems.hostname}:#{ems.port}/v2.0/tokens",
+    :openstack_tenant   => tenant,
+    :connection_options => {:ssl_verify_peer => false}
   })
-  
-  keystone_service = Fog::Identity.new({
-    :provider => 'OpenStack',
-    :openstack_api_key => ems.authentication_password,
+
+  keystone_service = Fog::Identity::OpenStack.new({
+    :openstack_api_key  => ems.authentication_password,
     :openstack_username => ems.authentication_userid,
-    :openstack_auth_url => "http://#{ems.hostname}:35357/v2.0/tokens",
-    :openstack_tenant => tenant_name
+    :openstack_auth_url => "https://#{ems.hostname}:#{ems.port}/v2.0/tokens",
+    :openstack_tenant   => tenant,
+    :connection_options => {:ssl_verify_peer => false}
   })
   
   tenant_id = keystone_service.current_tenant["id"]

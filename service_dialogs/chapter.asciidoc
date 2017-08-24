@@ -84,6 +84,18 @@ Here is another, more real-world example of the versatility of dynamic elements:
 
 This example populates a dynamic drop-down list with infrastructure lifecycle environments into which a user can provision a new virtual machine. If the user is a member of group containing the string "administrators", then a further two environments: "Pre-Production" and "Production" are added to the list.
 
+[NOTE]
+====
+If an element is marked as *Required* then using '!' as the default return on the prompt value will satisfy the 'required' stipulation without the user necessarily selecting anything from the presented drop-down list. This may not be desirable. For *Required* elements a preferred option would be to use +nil+ as the default return, for example:
+
+[source,ruby]
+----
+values_hash[nil] = '-- select from list --'
+----
+
+This would then not satisfy the 'required' stipulation, and so force the user to select a presented 'real' value from the drop-down list.
+====
+
 === Read-Only and Protected Elements
 
 CloudForms 3.1/ManageIQ _Anand_ added the ability to mark a text box as protected, which results in any input being obfuscated. This is particularly useful for inputting passwords (see <<i3>>).
