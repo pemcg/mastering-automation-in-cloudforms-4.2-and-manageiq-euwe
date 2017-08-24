@@ -11,6 +11,8 @@ Tags are not only applied to virtual machines. We often tag our virtual infrastr
 
 These are just three examples of how tags can simplify systems administration, and help our Automate workflows. Fortunately Automate has comprehensive support for tag-related operations.
 
+Tags are also the foundation of the Role Based Acccess Control (RBAC) system. We can use tags to grant access to certain objects for existing groups of users. Discussing the concept of RBAC is out of scope for this document, but nevertheless something very important to keep in mind.
+
 '''
 .Tag or Custom Attribute?
 ****
