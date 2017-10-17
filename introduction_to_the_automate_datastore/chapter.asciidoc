@@ -199,7 +199,7 @@ We are now ready to use this information to write our first automation script.
 
 ==== Further Reading
 
-http://CloudForms/ManageIQ.org/pdf/CloudForms/ManageIQ-0-Scripting_Actions_in_CloudForms/ManageIQ-en-US.pdf[Scripting Actions in CloudForms/ManageIQ] 
+https://access.redhat.com/documentation/en-us/red_hat_cloudforms/4.2/html/scripting_actions_in_cloudforms/[Scripting Actions in CloudForms] 
 
 https://access.redhat.com/solutions/1225313[CloudForms 3.1 Exporting Automate Domains]
 
