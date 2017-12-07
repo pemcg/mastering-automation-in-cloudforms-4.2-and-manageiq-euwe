@@ -35,7 +35,7 @@ Once we've setup the credentials and inventory, we're ready create our project, 
 
 ===== Project
 
-Well create a new Git project from the https://github.com/pemcg/ansible_roles repository (master branch).
+Well create a new Git project from the https://github.com/pemcg/ansible_playbooks repository (master branch).
 
 ===== Job Template
 
