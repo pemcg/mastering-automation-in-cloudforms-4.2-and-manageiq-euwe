@@ -92,7 +92,7 @@ The _CatalogBundleInitialization_ method passes the service dialog element value
 
 === Summary
 
-This chapter has introduced the two service provision state machines that we can use to create service catalog items and bundles, with no need for any Ruby scripting. We can create simple but impressive service catalogs in minutes using these entry points, and we see a practical example of this in link:../creating_a_service_catalog)item/chapter.asciidoc[Creating a Service Catalog Item].
+This chapter has introduced the two service provision state machines that we can use to create service catalog items and bundles, with no need for any Ruby scripting. We can create simple but impressive service catalogs in minutes using these entry points, and we see a practical example of this in link:../creating_a_service_catalog_item/chapter.asciidoc[Creating a Service Catalog Item].
 
 ==== Further Reading
 
