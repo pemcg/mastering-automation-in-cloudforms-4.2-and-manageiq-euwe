@@ -5,11 +5,16 @@ In link:../vm_provision_state_machine/chapter.asciidoc[The VM Provision State Ma
 
 === Scenario
 
-We are using an RHEV provider with our ManageIQ installation, and we can successfully provision virtual machines using *Native Clone* provision type from fully configured RHEV templates. The templates all have a single 30GB thin-provisioned hard drive.
+We are using an RHEV 3.6 provider with our ManageIQ installation, and we can successfully provision virtual machines using *Native Clone* provision type from fully configured RHEV templates. The templates all have a single 30GB thin-provisioned hard drive.
+
+[NOTE]
+====
+This chapter makes API calls to the RHEV manager using the RHEV 3.x API payload syntax. This has changed slightly with RHV 4.x, and these examples do not work correctly with RHV 4.x. A RHV 4.x compatible __add_disk__ script is provided https://github.com/pemcg/mastering-automation-in-cloudforms-4.2-and-manageiq-euwe/tree/master/customising_vm_provisioning/scripts/add_disk_rhv_4x.rb[here]
+====
 
 === Task
 
-We would like all virtual machines provisioned from these templates to have a second 30GB hard drive added automatically during provisioning. The second drive should be created in the same RHEV storage domain as the first drive, (i.e. not hardcoded to a storage domain).
+We would like all virtual machines provisioned from these templates to have a second 30GB hard drive added automatically during provisioning. The second drive should be created in the same RHEV storage domain as the first drive, (i.e. not hard coded to a storage domain).
 
 === Methodology
 
@@ -298,7 +303,7 @@ rescue => err
 end
 ----
 
-The full scripts are also available from https://github.com/pemcg/oreilly-mastering-cloudforms-automation[here]
+The full scripts are also available from https://github.com/pemcg/mastering-automation-in-cloudforms-4.2-and-manageiq-euwe/tree/master/customising_vm_provisioning/scripts[here]
 
 ==== Step 4. Add Our New Instances to the Copied State Machine
 

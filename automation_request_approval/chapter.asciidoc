@@ -134,7 +134,7 @@ image::images/ss6.png[Screenshot,350,align="center"]
 The method code is copied and adapted as appropriate from the VM _ProvisionRequest_Pending_ method. We specify as the *to_email_address* a user that will act as approver for the automation requests.
 
 The full code for the methods is
-https://github.com/pemcg/oreilly-mastering-cloudforms-automation/tree/master/chapter43/scripts[here]
+https://github.com/pemcg/mastering-automation-in-cloudforms-4.2-and-manageiq-euwe/tree/master/automation_request_approval/scripts[here]
 
 === Policies
 
