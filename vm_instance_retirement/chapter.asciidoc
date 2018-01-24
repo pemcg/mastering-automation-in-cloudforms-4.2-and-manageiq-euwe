@@ -3,7 +3,7 @@
 
 CloudForms and ManageIQ are virtual machine and instance lifecycle management tools, and so far we have concentrated on the provisioning phase of that lifecycle. The products also have virtual machine retirement workflows that lets us manage the retirement and deletion of our virtual machines or instances, both from the provider and from the CloudForms/ManageIQ VMDB if required.
 
-The retirement process allows us to treat differently virtual machines that were provisioned by CloudForms or ManageIQ, and those that might have already existed on the provider infrastructure, or have been [rovisioned by the native infrastructure manager.
+The retirement process allows us to treat differently virtual machines that were provisioned by CloudForms or ManageIQ, and those that might have already existed on the provider infrastructure, or have been provisioned by the native infrastructure manager.
 
 [NOTE]
 We may wish to keep the VMDB record of a virtual machine long after its deletion from the provider, for recording and auditing purposes.
