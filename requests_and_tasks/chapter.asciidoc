@@ -21,11 +21,11 @@ Examples of these are:
 
 * Calling an automation request via the RESTful API
 * Provisioning a host
-* Provisioning a virtual machines
+* Provisioning a virtual machine
 * Requesting a service
-* Reconfiguring a virtual machines
+* Reconfiguring a virtual machine
 * Reconfiguring a service
-* Migrating a virtual machines
+* Migrating a virtual machine
 
 Let's now look at these in more detail.
 
