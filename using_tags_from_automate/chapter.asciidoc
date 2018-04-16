@@ -52,7 +52,7 @@ end
 ----
 
 [NOTE]
-Tag and category _names_ must be lower-case, and optionally contain underscores. They have a maximum length of 50 characters. The tag and category _descriptions_ can be free text.
+Tag and category _names_ must be lower-case alphanumeric, and optionally contain underscores or colons. They have a maximum length of 50 characters. The tag and category _descriptions_ can be free text.
 
 === Assigning and Removing Tags
 
