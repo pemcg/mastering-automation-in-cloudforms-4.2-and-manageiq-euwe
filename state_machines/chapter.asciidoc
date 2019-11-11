@@ -223,7 +223,7 @@ When deciding whether to implement a workflow as a state machine, consider the f
 
 * Would my code be cleaner if I could assume that preconditions had been setup or tested before entry?
 
-* Might any of my workflow steps result in an error that could possibly he handled and recovered from?
+* Might any of my workflow steps result in an error that could possibly be handled and recovered from?
 
 * Do any of my workflow steps require me to retry an operation in a wait loop?
 
