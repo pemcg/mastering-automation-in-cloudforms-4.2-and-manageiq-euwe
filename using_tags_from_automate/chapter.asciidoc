@@ -61,7 +61,7 @@ We can assign a category/tag to an object (in this case a virtual machine):
 [source,ruby]
 ----
 vm = $evm.root['vm']
-vm.tag_assign("data_center/london")
+vm.tag_assign("data_centre/london")
 ----
 
 We can remove a category/tag from an object:
@@ -69,7 +69,7 @@ We can remove a category/tag from an object:
 [source,ruby]
 ----
 vm = $evm.root['vm']
-vm.tag_unassign("data_center/paris")
+vm.tag_unassign("data_centre/paris")
 ----
 
 
